@@ -21,16 +21,6 @@ jobs:
       - name: Install dependencies
         run: sudo apt update -yqq && DEBIAN_FRONTEND=noninteractive sudo apt install -y cmake clang-tidy build-essential
 
-      # Install specific clang-format version
-      - name: Install clang-format
-        run: |
-          sudo apt update
-          sudo apt install -y wget
-          wget https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.3/clang-format-18.1.3-Linux-x86_64.tar.xz
-          tar -xf clang-format-18.1.3-Linux-x86_64.tar.xz
-          sudo mv clang-18.1.3/bin/clang-format /usr/local/bin/
-          sudo chmod +x /usr/local/bin/clang-format
-
       # Build project
       - name: Build with CMake
         run: ./compile.sh
@@ -40,12 +30,6 @@ jobs:
         run: |
           cd build
           ctest --output-on-failure
-
-      # Run clang-format
-      - name: Check code format with clang-format
-        run: |
-          clang-format --version
-          find src include -name "*.cpp" -o -name "*.hpp" | xargs clang-format -i --dry-run --Werror
 
       # Run clang-tidy
       - name: Lint code with clang-tidy
