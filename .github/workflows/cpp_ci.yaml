@@ -1,0 +1,44 @@
+name: C++ CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Install dependencies
+      - name: Install dependencies
+        run: apt update -yqq && DEBIAN_FRONTEND=noninteractive apt install -y cmake clang-format clang-tidy build-essential
+
+      # Build project
+      - name: Build with CMake
+        run: ./compile.sh
+
+      # Run tests
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
+      # Run clang-format
+      - name: Check code format with clang-format
+        run: |
+          clang-format --version
+          find src include -name "*.cpp" -o -name "*.hpp" | xargs clang-format -i --dry-run --Werror
+
+      # Run clang-tidy
+      - name: Lint code with clang-tidy
+        run: |
+          clang-tidy --version
+          find src -name "*.cpp" | xargs -I {} clang-tidy {} -- -Iinclude

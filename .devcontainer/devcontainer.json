@@ -1,7 +1,19 @@
 {
     "name": "X86 Dev Container",
     "image": "ubuntu:latest",
-    "runArgs": ["--platform=linux/amd64"],   // Ensures Docker runs it as x86
-    "postCreateCommand": "apt update",  // Install essential tools
-    "remoteUser": "root"
+    "runArgs": ["--platform=linux/amd64"],
+    "postCreateCommand": "apt update -yqq && DEBIAN_FRONTEND=noninteractive apt install -y curl wget tree git nano jq build-essential cmake clang-format clang-tidy",
+    "remoteUser": "root",
+    "mounts": [
+        // So we do not need to configure git again.
+        "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "mhutchie.git-graph",
+                "streetsidesoftware.code-spell-checker"
+            ]
+        }
+    }
 }

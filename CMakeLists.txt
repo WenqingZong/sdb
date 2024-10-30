@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.19)
 
-project("sdb" LANGUAGE CXX)
+project("sdb" LANGUAGES CXX)
 
 include(CTest)
 
