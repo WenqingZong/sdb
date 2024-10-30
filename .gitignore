@@ -1,0 +1,9 @@
+# IDEs
+.idea/
+.vscode/
+
+# CMake
+build/
+
+# MacOS
+.DS_Store

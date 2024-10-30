@@ -1,0 +1,7 @@
+{
+    "name": "X86 Dev Container",
+    "image": "ubuntu:latest",
+    "runArgs": ["--platform=linux/amd64"],   // Ensures Docker runs it as x86
+    "postCreateCommand": "apt update",  // Install essential tools
+    "remoteUser": "root"
+}
