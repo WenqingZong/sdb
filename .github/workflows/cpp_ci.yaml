@@ -19,7 +19,18 @@ jobs:
 
       # Install dependencies
       - name: Install dependencies
-        run: sudo apt update -yqq && DEBIAN_FRONTEND=noninteractive sudo apt install -y cmake clang-tidy build-essential
+        run: |
+        sudo apt update -yqq
+        DEBIAN_FRONTEND=noninteractive sudo apt install -y cmake clang-tidy build-essential pkg-config zip unzip tar
+
+      # Set up vcpkg
+      - name: Set up vcpkg
+        run: |
+          cd ..
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh
+        # Cache vcpkg to speed up builds
+        id: vcpkg
 
       # Build project
       - name: Build with CMake
@@ -30,6 +41,7 @@ jobs:
         run: |
           cd build
           ctest --output-on-failure
+          ./test/tests
 
       # Run clang-tidy
       - name: Lint code with clang-tidy
