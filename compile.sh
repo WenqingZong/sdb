@@ -8,7 +8,7 @@ fi
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-cmake ..
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake --fresh
 make
 
 cd ..
