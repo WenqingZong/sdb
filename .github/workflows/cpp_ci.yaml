@@ -20,8 +20,8 @@ jobs:
       # Install dependencies
       - name: Install dependencies
         run: |
-        sudo apt update -yqq
-        DEBIAN_FRONTEND=noninteractive sudo apt install -y cmake clang-tidy build-essential pkg-config zip unzip tar
+          sudo apt update -yqq
+          DEBIAN_FRONTEND=noninteractive sudo apt install -y cmake clang-tidy build-essential pkg-config zip unzip tar
 
       # Set up vcpkg
       - name: Set up vcpkg
