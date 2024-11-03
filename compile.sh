@@ -9,6 +9,9 @@ mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
 cmake .. -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake --fresh
+
+# To get avoid of make's Clock skew waring.
+sleep 2
 make
 
 cd ..
