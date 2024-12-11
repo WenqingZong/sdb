@@ -1,6 +1,6 @@
 #include <fcntl.h>
-#include <libsdb/pipe.hpp>
 #include <libsdb/error.hpp>
+#include <libsdb/pipe.hpp>
 #include <unistd.h>
 #include <utility>
 
@@ -15,13 +15,9 @@ sdb::pipe::~pipe() {
     close_write();
 }
 
-int sdb::pipe::release_read() {
-    return std::exchange(fds_[read_fd], -1);
-}
+int sdb::pipe::release_read() { return std::exchange(fds_[read_fd], -1); }
 
-int sdb::pipe::release_write() {
-    return std::exchange(fds_[write_fd], -1);
-}
+int sdb::pipe::release_write() { return std::exchange(fds_[write_fd], -1); }
 
 void sdb::pipe::close_read() {
     if (fds_[read_fd] != -1) {

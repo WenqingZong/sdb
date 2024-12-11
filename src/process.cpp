@@ -12,8 +12,7 @@ void exit_with_perror(sdb::pipe& channel, std::string const& prefix) {
     exit(-1);
 }
 
-std::unique_ptr<sdb::process>
-sdb::process::launch(std::filesystem::path path) {
+std::unique_ptr<sdb::process> sdb::process::launch(std::filesystem::path path) {
     pipe channel(/*close_on_exec=*/true);
 
     pid_t pid;
@@ -42,14 +41,13 @@ sdb::process::launch(std::filesystem::path path) {
         error::send(std::string(chars, chars + data.size()));
     }
 
-    std::unique_ptr<process> proc (new process(pid, /*terminate_on_end=*/true));
+    std::unique_ptr<process> proc(new process(pid, /*terminate_on_end=*/true));
     proc->wait_on_signal();
 
     return proc;
 }
 
-std::unique_ptr<sdb::process>
-sdb::process::attach(pid_t pid) {
+std::unique_ptr<sdb::process> sdb::process::attach(pid_t pid) {
     if (pid == 0) {
         error::send("Invalid PID");
     }
@@ -57,7 +55,7 @@ sdb::process::attach(pid_t pid) {
         error::send_errno("Could not attach");
     }
 
-    std::unique_ptr<process> proc (new process(pid, /*terminate_on_end=*/false));
+    std::unique_ptr<process> proc(new process(pid, /*terminate_on_end=*/false));
     proc->wait_on_signal();
 
     return proc;
@@ -91,12 +89,10 @@ sdb::stop_reason::stop_reason(int wait_status) {
     if (WIFEXITED(wait_status)) {
         reason = process_state::exited;
         info = WEXITSTATUS(wait_status);
-    }
-    else if (WIFSIGNALED(wait_status)) {
+    } else if (WIFSIGNALED(wait_status)) {
         reason = process_state::terminated;
         info = WTERMSIG(wait_status);
-    }
-    else if (WIFSTOPPED(wait_status)) {
+    } else if (WIFSTOPPED(wait_status)) {
         reason = process_state::stopped;
         info = WSTOPSIG(wait_status);
     }
