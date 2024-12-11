@@ -1,25 +1,45 @@
 #include <libsdb/error.hpp>
+#include <libsdb/pipe.hpp>
 #include <libsdb/process.hpp>
 #include <sys/ptrace.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+void exit_with_perror(sdb::pipe& channel, std::string const& prefix) {
+    auto message = prefix + ": " + std::strerror(errno);
+    channel.write(reinterpret_cast<std::byte*>(message.data()), message.size());
+    exit(-1);
+}
+
 std::unique_ptr<sdb::process>
 sdb::process::launch(std::filesystem::path path) {
+    pipe channel(/*close_on_exec=*/true);
+
     pid_t pid;
     if ((pid = fork()) < 0) {
         error::send_errno("fork failed");
     }
 
     if (pid == 0) {
+        channel.close_read();
         if (ptrace(PTRACE_TRACEME, 0, nullptr, nullptr) < 0) {
-            error::send_errno("Tracing failed");
+            exit_with_perror(channel, "Tracing failed");
         }
 
         if (execlp(path.c_str(), path.c_str(), nullptr) < 0) {
-            error::send_errno("exec failed");
+            exit_with_perror(channel, "exec failed");
         }
+    }
+
+    channel.close_write();
+    auto data = channel.read();
+    channel.close_read();
+
+    if (data.size() > 0) {
+        waitpid(pid, nullptr, 0);
+        auto chars = reinterpret_cast<char*>(data.data());
+        error::send(std::string(chars, chars + data.size()));
     }
 
     std::unique_ptr<process> proc (new process(pid, /*terminate_on_end=*/true));
