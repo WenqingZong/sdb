@@ -6,7 +6,7 @@ The original implementation is [here](https://github.com/TartanLlama/sdb).
 ## Project Setup
 Please develop in a native x86-64 computer, otherwise the code won't work. As a reference, here is my enviroment:
 
-[neofetch](./images/neofetch.png)
+![neofetch](./images/neofetch.png)
 
 Editor used:
 - VsCode
