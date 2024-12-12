@@ -39,9 +39,9 @@ jobs:
       # Run tests
       - name: Run tests
         run: |
+          ./build/test/tests
           cd build
           ctest --output-on-failure
-          ./test/tests
 
       # Run clang-tidy
       - name: Lint code with clang-tidy
