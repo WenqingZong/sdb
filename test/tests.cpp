@@ -33,7 +33,40 @@ TEST_CASE("process::launch no such program", "[process]") {
 }
 
 TEST_CASE("process::attach success", "[process]") {
-    auto pid = /* launch program without attaching */;
-    auto proc = process::attach(pid);
-    REQUIRE(get_process_status(pid) == 't');
+    // Please set cwd to project root before running this test. Otherwise, it
+    // will fail with file not found.
+    auto target = process::launch("./build/test/targets/run_endlessly", false);
+    auto proc = process::attach(target->pid());
+    REQUIRE(get_process_status(target->pid()) == 't');
+}
+
+TEST_CASE("process::attach invalid PID", "[process]") {
+    REQUIRE_THROWS_AS(process::attach(0), error);
+}
+
+TEST_CASE("process::resume success", "[process]") {
+    {
+        auto proc = process::launch("./build/test/targets/run_endlessly");
+        proc->resume();
+        auto status = get_process_status(proc->pid());
+        auto success = status == 'R' or status == 'S';
+        REQUIRE(success);
+    }
+
+    {
+        auto target =
+            process::launch("./build/test/targets/run_endlessly", false);
+        auto proc = process::attach(target->pid());
+        proc->resume();
+        auto status = get_process_status(proc->pid());
+        auto success = status == 'R' or status == 'S';
+        REQUIRE(success);
+    }
+}
+
+TEST_CASE("process::resume already terminated", "[process]") {
+    auto proc = process::launch("./build/test/targets/end_immediately");
+    proc->resume();
+    proc->wait_on_signal();
+    REQUIRE_THROWS_AS(proc->resume(), error);
 }
