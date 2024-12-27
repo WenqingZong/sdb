@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <libsdb/registers.hpp>
 #include <memory>
 #include <sys/types.h>
 
@@ -18,6 +19,11 @@ struct stop_reason {
 
 class process {
   public:
+    void write_fprs(const user_fpregs_struct& fprs);
+    void write_gprs(const user_regs_struct& gprs);
+    registers& get_registers() { return *registers_; }
+    const registers& get_registers() const { return *registers_; }
+    void write_user_area(std::size_t offset, std::uint64_t data);
     static std::unique_ptr<process> launch(std::filesystem::path path,
                                            bool debug = true);
     static std::unique_ptr<process> attach(pid_t pid);
@@ -37,11 +43,13 @@ class process {
     process_state state_ = process_state::stopped;
     process(pid_t pid, bool terminate_on_end, bool is_attached)
         : pid_(pid), terminate_on_end_(terminate_on_end),
-          is_attached_(is_attached) {}
+          is_attached_(is_attached), registers_(new registers(*this)) {}
 
+    void read_all_registers();
     process() = delete;
     process(const process&) = delete;
     process& operator=(const process&) = delete;
+    std::unique_ptr<registers> registers_;
 };
 } // namespace sdb
 
