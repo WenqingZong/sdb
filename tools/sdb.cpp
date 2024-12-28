@@ -66,6 +66,24 @@ namespace {
         std::cout << std::endl;
     }
 
+    void print_help(const std::vector<std::string>& args) {
+        if (args.size() == 1) {
+            std::cerr << R"(Available commands:
+    continue    - Resume the process
+    register    - Commands for operating on registers
+)";
+        } else if (is_prefix(args[1], "register")) {
+            std::cerr << R"(Available commands:
+    read
+    read <register>
+    read all
+    write <register> <value>
+)";
+        } else {
+            std::cerr << "No help available on that\n";
+        }
+    }
+
     void handle_command(std::unique_ptr<sdb::process>& process, std::string_view line) {
         auto args = split(line, ' ');
         auto command = args[0];
@@ -74,8 +92,9 @@ namespace {
             process->resume();
             auto reason = process->wait_on_signal();
             print_stop_reason(*process, reason);
-        }
-        else {
+        } else if (is_prefix(command, "help")) {
+            print_help(args);
+        } else {
             std::cerr << "Unknown command\n";
         }
     }
