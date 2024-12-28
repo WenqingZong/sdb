@@ -23,7 +23,6 @@ main:
     movq $39, %rax
     syscall
     movq %rax, %r12
-
     trap
 
     # Print contents of rsi
@@ -32,7 +31,6 @@ main:
     call printf@plt
     movq $0, %rdi
     call fflush@plt
-
     trap
 
     # Print contents of mm0
@@ -42,7 +40,6 @@ main:
     call printf@plt
     movq $0, %rdi
     call fflush@plt
-
     trap
 
     # Print contents of xmm0
@@ -51,7 +48,6 @@ main:
     call printf@plt
     movq $0, %rdi
     call fflush@plt
-
     trap
 
     # Print contents of st0
@@ -63,7 +59,6 @@ main:
     movq $0, %rdi
     call fflush@plt
     addq $16, %rsp
-
     trap
 
     popq %rbp
