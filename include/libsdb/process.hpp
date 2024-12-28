@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <libsdb/registers.hpp>
 #include <memory>
+#include <optional>
 #include <sys/types.h>
 
 namespace sdb {
@@ -24,8 +25,9 @@ class process {
     registers& get_registers() { return *registers_; }
     const registers& get_registers() const { return *registers_; }
     void write_user_area(std::size_t offset, std::uint64_t data);
-    static std::unique_ptr<process> launch(std::filesystem::path path,
-                                           bool debug = true);
+    static std::unique_ptr<process>
+    launch(std::filesystem::path path, bool debug = true,
+           std::optional<int> stdout_replacement = std::nullopt);
     static std::unique_ptr<process> attach(pid_t pid);
 
     void resume();
