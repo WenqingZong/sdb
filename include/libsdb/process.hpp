@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <libsdb/registers.hpp>
+#include <libsdb/types.hpp>
 #include <memory>
 #include <optional>
 #include <sys/types.h>
@@ -36,6 +37,11 @@ class process {
 
     pid_t pid() const { return pid_; }
     process_state state() const { return state_; }
+
+    virt_addr get_pc() const {
+        return virt_addr{
+            get_registers().read_by_id_as<std::uint64_t>(register_id::rip)};
+    }
 
   private:
     pid_t pid_ = 0;
