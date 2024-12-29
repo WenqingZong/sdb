@@ -7,4 +7,4 @@ install(
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} 
 )
 
-target_link_libraries(sdb PRIVATE sdb::libsdb PkgConfig::readline)
+target_link_libraries(sdb PRIVATE sdb::libsdb PkgConfig::readline fmt::fmt)
