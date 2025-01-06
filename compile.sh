@@ -15,3 +15,5 @@ sleep 2
 make
 
 cd ..
+echo "Build finished"
+echo

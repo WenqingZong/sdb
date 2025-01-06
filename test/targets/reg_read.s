@@ -1,3 +1,7 @@
+# /usr/bin/ld: warning: CMakeFiles/reg_read.dir/reg_read.s.o: missing .note.GNU-stack section implies executable stack
+# /usr/bin/ld: NOTE: This behaviour is deprecated and will be removed in a future version of the linker
+.section .note.GNU-stack
+
 .global main
 
 .section .data

@@ -123,6 +123,51 @@ const Stoppoint& stoppoint_collection<Stoppoint>::get_by_id(
     return const_cast<stoppoint_collection*>(this)->get_by_id(id);
 }
 
+template <class Stoppoint>
+Stoppoint& stoppoint_collection<Stoppoint>::get_by_address(virt_addr address) {
+    auto it = find_by_address(address);
+    if (it == end(stoppoints_)) {
+        error::send("Stoppoint with given address not found");
+    }
+    return **it;
+}
+
+template <class Stoppoint>
+const Stoppoint&
+stoppoint_collection<Stoppoint>::get_by_address(virt_addr address) const {
+    return const_cast<stoppoint_collection*>(this)->get_by_address(address);
+}
+
+template <class Stoppoint>
+void stoppoint_collection<Stoppoint>::remove_by_id(
+    typename Stoppoint::id_type id) {
+    auto it = find_by_id(id);
+    (**it).disable();
+    stoppoints_.erase(it);
+}
+
+template <class Stoppoint>
+void stoppoint_collection<Stoppoint>::remove_by_address(virt_addr address) {
+    auto it = find_by_address(address);
+    (**it).disable();
+    stoppoints_.erase(it);
+}
+
+template <class Stoppoint>
+template <class F>
+void stoppoint_collection<Stoppoint>::for_each(F f) {
+    for (auto& point : stoppoints_) {
+        f(*point);
+    }
+}
+
+template <class Stoppoint>
+template <class F>
+void stoppoint_collection<Stoppoint>::for_each(F f) const {
+    for (const auto& point : stoppoints_) {
+        f(*point);
+    }
+}
 } // namespace sdb
 
 #endif
