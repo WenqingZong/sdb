@@ -76,6 +76,7 @@ Available commands:
     breakpoint  - Commands for operating on breakpoints
     continue    - Resume the process
     register    - Commands for operating on registers
+    step        - Step over a single instruction
 )";
         } else if (is_prefix(args[1], "register")) {
             std::cerr << R"(
@@ -258,6 +259,9 @@ Available commands:
             handle_register_command(*process, args);
         } else if (is_prefix(command, "breakpoint")) {
             handle_breakpoint_command(*process, args);
+        } else if (is_prefix(command, "step")) {
+            auto reason = process->step_instruction();
+            print_stop_reason(*process, reason);
         } else {
             std::cerr << "Unknown command\n";
         }
@@ -273,8 +277,10 @@ namespace {
         }
         // Passing program name
         else {
-            const char* program_path = argv[1];
-            return sdb::process::launch(program_path);
+            auto program_path = argv[1];
+            auto proc = sdb::process::launch(program_path);
+            fmt::print("Launched process with PID {}\n", proc->pid());
+            return proc;
         }
     }
 }

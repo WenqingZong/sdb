@@ -1,6 +1,7 @@
 #include <libsdb/error.hpp>
 #include <libsdb/pipe.hpp>
 #include <libsdb/process.hpp>
+#include <sys/personality.h>
 #include <sys/ptrace.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -23,6 +24,7 @@ sdb::process::launch(std::filesystem::path path, bool debug,
     }
 
     if (pid == 0) {
+        personality(ADDR_NO_RANDOMIZE);
         channel.close_read();
         if (stdout_replacement) {
             if (dup2(*stdout_replacement, STDOUT_FILENO) < 0) {
@@ -93,8 +95,22 @@ sdb::process::~process() {
 }
 
 void sdb::process::resume() {
+    auto pc = get_pc();
+    if (breakpoint_sites_.enabled_stoppoint_at_address(pc)) {
+        auto& bp = breakpoint_sites_.get_by_address(pc);
+        bp.disable();
+        if (ptrace(PTRACE_SINGLESTEP, pid_, nullptr, nullptr) < 0) {
+            error::send_errno("Failed to single step");
+        }
+        int wait_status;
+        if (waitpid(pid_, &wait_status, 0) < 0) {
+            error::send_errno("waitpid failed");
+        }
+        bp.enable();
+    }
+
     if (ptrace(PTRACE_CONT, pid_, nullptr, nullptr) < 0) {
-        error::send_errno("Cound not resume");
+        error::send_errno("Could not resume");
     }
     state_ = process_state::running;
 }
@@ -123,6 +139,12 @@ sdb::stop_reason sdb::process::wait_on_signal() {
 
     if (is_attached_ and state_ == process_state::stopped) {
         read_all_registers();
+
+        auto instr_begin = get_pc() - 1;
+        if (reason.info == SIGTRAP and
+            breakpoint_sites_.enabled_stoppoint_at_address(instr_begin)) {
+            set_pc(instr_begin);
+        }
     }
 
     return reason;
@@ -175,4 +197,24 @@ sdb::breakpoint_site& sdb::process::create_breakpoint_site(virt_addr address) {
     }
     return breakpoint_sites_.push(
         std::unique_ptr<breakpoint_site>(new breakpoint_site(*this, address)));
+}
+
+sdb::stop_reason sdb::process::step_instruction() {
+    std::optional<breakpoint_site*> to_reenable;
+    auto pc = get_pc();
+    if (breakpoint_sites_.enabled_stoppoint_at_address(pc)) {
+        auto& bp = breakpoint_sites_.get_by_address(pc);
+        bp.disable();
+        to_reenable = &bp;
+    }
+
+    if (ptrace(PTRACE_SINGLESTEP, pid_, nullptr, nullptr) < 0) {
+        error::send_errno("Could not single step");
+    }
+    auto reason = wait_on_signal();
+
+    if (to_reenable) {
+        to_reenable.value()->enable();
+    }
+    return reason;
 }
