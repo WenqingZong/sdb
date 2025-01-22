@@ -62,6 +62,10 @@ class process {
 
     sdb::stop_reason step_instruction();
 
+    std::vector<std::byte> read_memory(virt_addr address,
+                                       std::size_t amount) const;
+    void write_memory(virt_addr addres, span<const std::byte> data);
+
   private:
     pid_t pid_ = 0;
     bool terminate_on_end_ = true;
