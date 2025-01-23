@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <libsdb/bit.hpp>
 #include <libsdb/breakpoint_site.hpp>
 #include <libsdb/registers.hpp>
 #include <libsdb/stoppoint_collection.hpp>
@@ -65,6 +66,15 @@ class process {
     std::vector<std::byte> read_memory(virt_addr address,
                                        std::size_t amount) const;
     void write_memory(virt_addr addres, span<const std::byte> data);
+
+    /*
+    In cpp, template functions can only be implemented in header file, a bit
+    like static dispatch in Rust.
+    */
+    template <class T> T read_memory_as(virt_addr address) const {
+        auto data = read_memory(address, sizeof(T));
+        return from_bytes<T>(data.data());
+    }
 
   private:
     pid_t pid_ = 0;
