@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update -yqq
-          DEBIAN_FRONTEND=noninteractive sudo apt install -y cmake clang-tidy build-essential pkg-config zip unzip tar libzydis-div zydis-tools
+          DEBIAN_FRONTEND=noninteractive sudo apt install -y cmake clang-tidy build-essential pkg-config zip unzip tar libzydis-dev zydis-tools
 
       # Set up vcpkg
       - name: Set up vcpkg
