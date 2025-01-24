@@ -35,6 +35,16 @@ template <class Stoppoint> class stoppoint_collection {
     std::size_t size() const { return stoppoints_.size(); }
     bool empty() const { return stoppoints_.empty(); }
 
+    std::vector<Stoppoint*> get_in_region(virt_addr low, virt_addr high) const {
+        std::vector<Stoppoint*> ret;
+        for (auto& site : stoppoints_) {
+            if (site->in_range(low, high)) {
+                ret.push_back(&*site);
+            }
+        }
+        return ret;
+    }
+
   private:
     using points_t = std::vector<std::unique_ptr<Stoppoint>>;
 
