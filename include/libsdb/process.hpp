@@ -47,7 +47,9 @@ class process {
             get_registers().read_by_id_as<std::uint64_t>(register_id::rip)};
     }
 
-    breakpoint_site& create_breakpoint_site(virt_addr address);
+    breakpoint_site& create_breakpoint_site(virt_addr address,
+                                            bool hardware = false,
+                                            bool internal = false);
 
     stoppoint_collection<breakpoint_site>& breakpoint_sites() {
         return breakpoint_sites_;
@@ -78,6 +80,10 @@ class process {
         return from_bytes<T>(data.data());
     }
 
+    int set_hardware_breakpoint(breakpoint_site::id_type id, virt_addr address);
+
+    void clear_hardware_stoppoint(int index);
+
   private:
     pid_t pid_ = 0;
     bool terminate_on_end_ = true;
@@ -95,6 +101,9 @@ class process {
     std::unique_ptr<registers> registers_;
 
     stoppoint_collection<breakpoint_site> breakpoint_sites_;
+
+    int set_hardware_stoppoint(virt_addr address, stoppoint_mode mode,
+                               std::size_t size);
 };
 } // namespace sdb
 

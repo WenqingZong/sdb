@@ -47,4 +47,4 @@ jobs:
       - name: Lint code with clang-tidy
         run: |
           clang-tidy --version
-          find src -name "*.cpp" | xargs -I {} clang-tidy {} -- -Iinclude
+          find src include test tools -name "*.cpp" | xargs -I {} clang-tidy {} -- -Iinclude

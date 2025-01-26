@@ -1,4 +1,4 @@
 #!/bin/bash
 
-find src include test -name "*.cpp" -o -name "*.hpp" -o -name "*.inc" | xargs clang-format -i
+find src include test tools -name "*.cpp" -o -name "*.hpp" -o -name "*.inc" | xargs clang-format -i
 git add -u

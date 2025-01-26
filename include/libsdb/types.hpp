@@ -7,6 +7,8 @@
 #include <vector>
 
 namespace sdb {
+enum class stoppoint_mode { write, read_write, execute };
+
 template <class T> class span {
   public:
     span() = default;
