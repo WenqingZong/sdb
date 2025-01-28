@@ -15,6 +15,8 @@
 #include <vector>
 
 namespace sdb {
+enum class trap_type { single_step, software_break, hardware_break, unknown };
+
 enum class process_state { stopped, running, exited, terminated };
 
 struct stop_reason {
@@ -22,6 +24,7 @@ struct stop_reason {
 
     process_state reason;
     std::uint8_t info;
+    std::optional<trap_type> trap_reason;
 };
 
 class process {
@@ -95,6 +98,9 @@ class process {
         return watchpoints_;
     }
 
+    std::variant<breakpoint_site::id_type, watchpoint::id_type>
+    get_current_hardware_stoppoint() const;
+
   private:
     pid_t pid_ = 0;
     bool terminate_on_end_ = true;
@@ -116,6 +122,8 @@ class process {
 
     int set_hardware_stoppoint(virt_addr address, stoppoint_mode mode,
                                std::size_t size);
+
+    void augment_stop_reason(stop_reason& reason);
 };
 } // namespace sdb
 

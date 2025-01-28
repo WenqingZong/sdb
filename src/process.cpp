@@ -26,6 +26,9 @@ sdb::process::launch(std::filesystem::path path, bool debug,
     }
 
     if (pid == 0) {
+        if (setpgid(0, 0) < 0) {
+            exit_with_perror(channel, "Could not set pgid");
+        }
         personality(ADDR_NO_RANDOMIZE);
         channel.close_read();
         if (stdout_replacement) {
@@ -141,6 +144,7 @@ sdb::stop_reason sdb::process::wait_on_signal() {
 
     if (is_attached_ and state_ == process_state::stopped) {
         read_all_registers();
+        augment_stop_reason(reason);
 
         auto instr_begin = get_pc() - 1;
         if (reason.info == SIGTRAP and
@@ -378,4 +382,50 @@ sdb::watchpoint& sdb::process::create_watchpoint(virt_addr address,
     }
     return watchpoints_.push(std::unique_ptr<watchpoint>(
         new watchpoint(*this, address, mode, size)));
+}
+
+void sdb::process::augment_stop_reason(sdb::stop_reason& reason) {
+    siginfo_t info;
+    if (ptrace(PTRACE_GETSIGINFO, pid_, nullptr, &info) < 0) {
+        error::send_errno("Failed to get signal info");
+    }
+
+    reason.trap_reason = trap_type::unknown;
+
+    if (reason.info == SIGTRAP) {
+        switch (info.si_code) {
+        case TRAP_TRACE:
+            reason.trap_reason = trap_type::single_step;
+            break;
+        case SI_KERNEL:
+            reason.trap_reason = trap_type::software_break;
+            break;
+        case TRAP_HWBKPT:
+            reason.trap_reason = trap_type::hardware_break;
+            break;
+        }
+    }
+}
+
+std::variant<sdb::breakpoint_site::id_type, sdb::watchpoint::id_type>
+sdb::process::get_current_hardware_stoppoint() const {
+    auto& regs = get_registers();
+    auto status = regs.read_by_id_as<std::uint64_t>(register_id::dr6);
+    // ctz for cound trailing zeros, equivalent to find position of the
+    // least-significant set bit ll for unsigned long long
+    auto index = __builtin_ctzll(status);
+
+    auto id = static_cast<int>(register_id::dr0) + index;
+    auto addr = virt_addr(
+        regs.read_by_id_as<std::uint64_t>(static_cast<register_id>(id)));
+
+    using ret =
+        std::variant<sdb::breakpoint_site::id_type, sdb::watchpoint::id_type>;
+    if (breakpoint_sites_.contains_address(addr)) {
+        auto site_id = breakpoint_sites_.get_by_address(addr).id();
+        return ret{std::in_place_index<0>, site_id};
+    } else {
+        auto watch_id = watchpoints_.get_by_address(addr).id();
+        return ret{std::in_place_index<1>, watch_id};
+    }
 }
