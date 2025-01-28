@@ -18,6 +18,12 @@
 #include <vector>
 
 namespace {
+
+// g for global
+sdb::process* g_sdb_process = nullptr;
+
+void handle_sigint(int) { kill(g_sdb_process->pid(), SIGSTOP); }
+
 void print_disassembly(sdb::process& process, sdb::virt_addr address,
                        std::size_t n_instructions) {
     sdb::disassembler dis(process);
@@ -581,6 +587,8 @@ int main(int argc, const char* argv[]) {
 
     try {
         auto process = attach(argc, argv);
+        g_sdb_process = process.get();
+        signal(SIGINT, handle_sigint);
         main_loop(process);
     } catch (const sdb::error& err) {
         std::cout << err.what() << '\n';

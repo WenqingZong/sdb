@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update -yqq
-          DEBIAN_FRONTEND=noninteractive sudo apt install -y cmake clang-tidy build-essential pkg-config zip unzip tar libzydis-dev zydis-tools
+          DEBIAN_FRONTEND=noninteractive sudo apt install -y cmake clang-tidy build-essential pkg-config zip unzip tar libfmt-dev libzydis-dev zydis-tools
 
       # Set up vcpkg
       - name: Set up vcpkg
@@ -47,4 +47,4 @@ jobs:
       - name: Lint code with clang-tidy
         run: |
           clang-tidy --version
-          find src include test tools -name "*.cpp" | xargs -I {} clang-tidy {} -- -Iinclude
+          find src include tools -name "*.cpp" -name "*.hpp" | xargs -I {} clang-tidy {} -- -Iinclude
