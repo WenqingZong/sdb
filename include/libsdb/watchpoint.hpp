@@ -30,6 +30,11 @@ class watchpoint {
         return low <= address_ and high > address_;
     }
 
+    std::uint64_t data() const { return data_; }
+    std::uint64_t previous_data() const { return previous_data_; }
+
+    void update_data();
+
   private:
     friend process;
     watchpoint(process& proc, virt_addr address, stoppoint_mode mode,
@@ -42,6 +47,9 @@ class watchpoint {
     std::size_t size_;
     bool is_enabled_;
     int hardware_register_index_ = -1;
+
+    std::uint64_t data_ = 0;
+    std::uint64_t previous_data_ = 0;
 };
 } // namespace sdb
 
