@@ -15,6 +15,12 @@ void exit_with_perror(sdb::pipe& channel, std::string const& prefix) {
     exit(-1);
 }
 
+void set_ptrace_options(pid_t pid) {
+    if (ptrace(PTRACE_SETOPTIONS, pid, nullptr, PTRACE_O_TRACESYSGOOD) < 0) {
+        sdb::error::send_errno("Failed to set TRACESYSGOOD option");
+    }
+}
+
 std::unique_ptr<sdb::process>
 sdb::process::launch(std::filesystem::path path, bool debug,
                      std::optional<int> stdout_replacement) {
@@ -60,6 +66,7 @@ sdb::process::launch(std::filesystem::path path, bool debug,
 
     if (debug) {
         proc->wait_on_signal();
+        set_ptrace_options(proc->pid());
     }
 
     return proc;
@@ -76,6 +83,8 @@ std::unique_ptr<sdb::process> sdb::process::attach(pid_t pid) {
     std::unique_ptr<process> proc(
         new process(pid, /*terminate_on_end=*/false, /*attached=*/true));
     proc->wait_on_signal();
+
+    set_ptrace_options(proc->pid());
 
     return proc;
 }
@@ -114,7 +123,11 @@ void sdb::process::resume() {
         bp.enable();
     }
 
-    if (ptrace(PTRACE_CONT, pid_, nullptr, nullptr) < 0) {
+    auto request =
+        syscall_catch_policy_.get_mode() == syscall_catch_policy::mode::none
+            ? PTRACE_CONT
+            : PTRACE_SYSCALL;
+    if (ptrace(request, pid_, nullptr, nullptr) < 0) {
         error::send_errno("Could not resume");
     }
     state_ = process_state::running;
@@ -158,6 +171,8 @@ sdb::stop_reason sdb::process::wait_on_signal() {
                 if (id.index() == 1) {
                     watchpoints_.get_by_id(std::get<1>(id)).update_data();
                 }
+            } else if (reason.trap_reason == trap_type::syscall) {
+                reason = maybe_resume_from_syscall(reason);
             }
         }
     }
@@ -399,8 +414,39 @@ void sdb::process::augment_stop_reason(sdb::stop_reason& reason) {
         error::send_errno("Failed to get signal info");
     }
 
-    reason.trap_reason = trap_type::unknown;
+    if (reason.info == (SIGTRAP | 0x80)) {
+        auto& sys_info = reason.syscall_info.emplace();
+        auto& regs = get_registers();
 
+        if (expecting_syscall_exit_) {
+            sys_info.entry = false;
+            sys_info.id =
+                regs.read_by_id_as<std::uint64_t>(register_id::orig_rax);
+            sys_info.ret = regs.read_by_id_as<std::uint64_t>(register_id::rax);
+            expecting_syscall_exit_ = false;
+        } else {
+            sys_info.entry = true;
+            sys_info.id =
+                regs.read_by_id_as<std::uint64_t>(register_id::orig_rax);
+
+            std::array<register_id, 6> arg_regs = {
+                register_id::rdi, register_id::rsi, register_id::rdx,
+                register_id::r10, register_id::r8,  register_id::r9};
+            for (auto i = 0; i < 6; i++) {
+                sys_info.args[i] =
+                    regs.read_by_id_as<std::uint64_t>(arg_regs[i]);
+            }
+            expecting_syscall_exit_ = true;
+        }
+
+        reason.info = SIGTRAP;
+        reason.trap_reason = trap_type::syscall;
+        return;
+    }
+
+    expecting_syscall_exit_ = false;
+
+    reason.trap_reason = trap_type::unknown;
     if (reason.info == SIGTRAP) {
         switch (info.si_code) {
         case TRAP_TRACE:
@@ -437,4 +483,24 @@ sdb::process::get_current_hardware_stoppoint() const {
         auto watch_id = watchpoints_.get_by_address(addr).id();
         return ret{std::in_place_index<1>, watch_id};
     }
+}
+
+sdb::stop_reason
+sdb::process::maybe_resume_from_syscall(const stop_reason& reason) {
+    /*
+    No need to check syscall_catch_policy::mode::none, becaue in this case, we
+    don't continue the process with PTRACE_SYSCALL so no stop would be triggered
+    in the first place.
+     */
+    if (syscall_catch_policy_.get_mode() == syscall_catch_policy::mode::some) {
+        auto& to_catch = syscall_catch_policy_.get_to_catch();
+        auto found =
+            std::find(begin(to_catch), end(to_catch), reason.syscall_info->id);
+
+        if (found == end(to_catch)) {
+            resume();
+            return wait_on_signal();
+        }
+    }
+    return reason;
 }

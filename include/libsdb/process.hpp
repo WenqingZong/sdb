@@ -15,9 +15,24 @@
 #include <vector>
 
 namespace sdb {
-enum class trap_type { single_step, software_break, hardware_break, unknown };
+enum class trap_type {
+    single_step,
+    software_break,
+    hardware_break,
+    syscall,
+    unknown
+};
 
 enum class process_state { stopped, running, exited, terminated };
+
+struct syscall_information {
+    std::uint64_t id;
+    bool entry;
+    union {
+        std::array<std::uint64_t, 6> args;
+        std::int64_t ret;
+    };
+};
 
 struct stop_reason {
     stop_reason(int wait_status);
@@ -25,6 +40,29 @@ struct stop_reason {
     process_state reason;
     std::uint8_t info;
     std::optional<trap_type> trap_reason;
+    std::optional<syscall_information> syscall_info;
+};
+
+class syscall_catch_policy {
+  public:
+    enum mode { none, some, all };
+
+    static syscall_catch_policy catch_all() { return {mode::all, {}}; }
+
+    static syscall_catch_policy catch_none() { return {mode::none, {}}; }
+
+    static syscall_catch_policy catch_some(std::vector<int> to_catch) {
+        return {mode::some, std::move(to_catch)};
+    }
+
+    mode get_mode() const { return mode_; }
+    const std::vector<int>& get_to_catch() const { return to_catch_; }
+
+  private:
+    syscall_catch_policy(mode mode, std::vector<int> to_catch)
+        : mode_(mode), to_catch_(std::move(to_catch)) {}
+    mode mode_ = mode::none;
+    std::vector<int> to_catch_;
 };
 
 class process {
@@ -101,6 +139,10 @@ class process {
     std::variant<breakpoint_site::id_type, watchpoint::id_type>
     get_current_hardware_stoppoint() const;
 
+    void set_syscall_catch_policy(syscall_catch_policy info) {
+        syscall_catch_policy_ = std::move(info);
+    }
+
   private:
     pid_t pid_ = 0;
     bool terminate_on_end_ = true;
@@ -124,7 +166,15 @@ class process {
                                std::size_t size);
 
     void augment_stop_reason(stop_reason& reason);
+
+    syscall_catch_policy syscall_catch_policy_ =
+        syscall_catch_policy::catch_none();
+
+    bool expecting_syscall_exit_ = false;
+
+    sdb::stop_reason maybe_resume_from_syscall(const stop_reason& reason);
 };
+
 } // namespace sdb
 
 #endif
