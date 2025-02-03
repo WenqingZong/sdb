@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <sys/types.h>
+#include <unordered_map>
 #include <vector>
 
 namespace sdb {
@@ -142,6 +143,9 @@ class process {
     void set_syscall_catch_policy(syscall_catch_policy info) {
         syscall_catch_policy_ = std::move(info);
     }
+
+    // auxv for auxiliary vector
+    std::unordered_map<int, std::uint64_t> get_auxv() const;
 
   private:
     pid_t pid_ = 0;

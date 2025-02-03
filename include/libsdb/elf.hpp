@@ -4,6 +4,7 @@
 #include <elf.h>
 #include <filesystem>
 #include <libsdb/types.hpp>
+#include <map>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -38,6 +39,15 @@ class elf {
     std::optional<file_addr>
     get_section_start_address(std::string_view name) const;
 
+    std::vector<const Elf64_Sym*>
+    get_symbols_by_name(std::string_view name) const;
+    std::optional<const Elf64_Sym*> get_symbol_at_address(file_addr addr) const;
+    std::optional<const Elf64_Sym*> get_symbol_at_address(virt_addr addr) const;
+    std::optional<const Elf64_Sym*>
+    get_symbol_containing_address(file_addr addr) const;
+    std::optional<const Elf64_Sym*>
+    get_symbol_containing_address(virt_addr addr) const;
+
   private:
     int fd_;
     std::filesystem::path path_;
@@ -56,6 +66,19 @@ class elf {
     void parse_symbol_table();
 
     std::vector<Elf64_Sym> symbol_table_;
+
+    void build_symbol_maps();
+    std::unordered_multimap<std::string_view, Elf64_Sym*> symbol_name_map_;
+    struct range_comparator {
+        // Functor, override () operator, so range_comparator object can be
+        // called
+        bool operator()(std::pair<file_addr, file_addr> lhs,
+                        std::pair<file_addr, file_addr> rhs) const {
+            return lhs.first < rhs.first;
+        }
+    };
+    std::map<std::pair<file_addr, file_addr>, Elf64_Sym*, range_comparator>
+        symbol_addr_map_;
 };
 
 } // namespace sdb
