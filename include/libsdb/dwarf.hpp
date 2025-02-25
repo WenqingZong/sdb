@@ -21,8 +21,9 @@ struct abbrev {
     std::vector<attr_spec> attr_specs;
 };
 
-class elf;
 class compile_unit;
+class die;
+class elf;
 
 class dwarf {
   public:
@@ -51,11 +52,33 @@ class compile_unit {
     const dwarf* dwarf_info() const { return parent_; }
     span<const std::byte> data() const { return data_; }
     const std::unordered_map<std::uint64_t, sdb::abbrev>& abbrev_table() const;
+    die root() const;
 
   private:
     dwarf* parent_;
     span<const std::byte> data_;
     std::size_t abbrev_offset_;
+};
+
+class die {
+
+  public:
+    explicit die(const std::byte* next) : next_(next) {}
+    die(const std::byte* pos, const compile_unit* cu, const abbrev* abbrev,
+        std::vector<const std::byte*> attr_locs, const std::byte* next)
+        : pos_(pos), cu_(cu), abbrev_(abbrev), attr_locs_(std::move(attr_locs)),
+          next_(next) {}
+    const compile_unit* cu() const { return cu_; }
+    const abbrev* abbrev_entry() const { return abbrev_; }
+    const std::byte* position() const { return pos_; }
+    const std::byte* next() const { return next_; }
+
+  private:
+    const std::byte* pos_ = nullptr;
+    const compile_unit* cu_ = nullptr;
+    const abbrev* abbrev_ = nullptr;
+    const std::byte* next_ = nullptr;
+    std::vector<const std::byte*> attr_locs_;
 };
 
 } // namespace sdb
