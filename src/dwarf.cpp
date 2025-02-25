@@ -259,3 +259,54 @@ sdb::die sdb::compile_unit::root() const {
     cursor cur({data_.begin() + header_size, data_.end()});
     return parse_die(*this, cur);
 }
+
+sdb::die::children_range::iterator::iterator(const sdb::die& d) {
+    cursor next_cur({d.next_, d.cu_->data().end()});
+    die_ = parse_die(*d.cu_, next_cur);
+}
+
+bool sdb::die::children_range::iterator::operator==(const iterator& rhs) const {
+    auto lhs_null = !die_.has_value() or !die_->abbrev_entry();
+    auto rhs_null = !rhs.die_.has_value() or !rhs.die_->abbrev_entry();
+    if (lhs_null and rhs_null) {
+        return true;
+    }
+    if (lhs_null or rhs_null) {
+        return false;
+    }
+
+    return die_->abbrev_ == rhs->abbrev_ and die_->next() == rhs->next();
+}
+
+sdb::die::children_range::iterator&
+sdb::die::children_range::iterator::operator++() {
+    if (!die_.has_value() or !die_->abbrev_) {
+        return *this;
+    }
+
+    if (!die_->abbrev_->has_children) {
+        cursor next_cur({die_->next_, die_->cu_->data().end()});
+        die_ = parse_die(*die_->cu_, next_cur);
+    } else {
+        iterator sub_children(*die_);
+        while (sub_children->abbrev_) {
+            sub_children++;
+        }
+        cursor next_cur({sub_children->next_, die_->cu_->data().end()});
+        die_ = parse_die(*die_->cu_, next_cur);
+    }
+    // 'this' is a pointer, and *this is dereference of the pointer, its result
+    // is a reference.
+    return *this;
+}
+
+sdb::die::children_range::iterator
+sdb::die::children_range::iterator::operator++(int) {
+    auto tmp = *this;
+    ++(*this);
+    return tmp;
+}
+
+sdb::die::children_range sdb::die::children() const {
+    return children_range(*this);
+}
