@@ -310,3 +310,133 @@ sdb::die::children_range::iterator::operator++(int) {
 sdb::die::children_range sdb::die::children() const {
     return children_range(*this);
 }
+
+bool sdb::die::contains(std::uint64_t attribute) const {
+    auto& specs = abbrev_->attr_specs;
+    return std::find_if(begin(specs), end(specs), [=](auto spec) {
+               return spec.attr == attribute;
+           }) != end(specs);
+}
+
+sdb::attr sdb::die::operator[](std::uint64_t attribute) const {
+    auto& specs = abbrev_->attr_specs;
+    for (std::size_t i = 0; i < specs.size(); i++) {
+        if (specs[i].attr == attribute) {
+            return {cu_, specs[i].attr, specs[i].form, attr_locs_[i]};
+        }
+    }
+    error::send("Attribute not found");
+}
+
+sdb::file_addr sdb::attr::as_address() const {
+    cursor cur({location_, cu_->data().end()});
+    if (form_ != DW_FORM_addr) {
+        error::send("Invalid address type");
+    }
+    auto elf = cu_->dwarf_info()->elf_file();
+    return file_addr{*elf, cur.u64()};
+}
+
+std::uint32_t sdb::attr::as_section_offset() const {
+    cursor cur({location_, cu_->data().end()});
+    if (form_ != DW_FORM_sec_offset) {
+        error::send("Invalid offset type");
+    }
+    return cur.u32();
+}
+
+std::uint64_t sdb::attr::as_int() const {
+    cursor cur({location_, cu_->data().end()});
+    switch (form_) {
+    case DW_FORM_data1:
+        return cur.u8();
+    case DW_FORM_data2:
+        return cur.u16();
+    case DW_FORM_data4:
+        return cur.u32();
+    case DW_FORM_data8:
+        return cur.u64();
+    case DW_FORM_udata:
+        return cur.uleb128();
+    default:
+        error::send("Invalid integer type");
+    }
+}
+
+sdb::span<const std::byte> sdb::attr::as_block() const {
+    std::size_t size;
+    cursor cur({location_, cu_->data().end()});
+    switch (form_) {
+    case DW_FORM_block1:
+        size = cur.u8();
+        break;
+    case DW_FORM_block2:
+        size = cur.u16();
+        break;
+    case DW_FORM_block4:
+        size = cur.u32();
+        break;
+    case DW_FORM_block:
+        size = cur.uleb128();
+        break;
+    default:
+        error::send("Invalid block type");
+    }
+    return {cur.position(), size};
+}
+
+sdb::die sdb::attr::as_reference() const {
+    cursor cur({location_, cu_->data().end()});
+    std::size_t offset;
+    switch (form_) {
+    case DW_FORM_ref1:
+        offset = cur.u8();
+        break;
+    case DW_FORM_ref2:
+        offset = cur.u16();
+        break;
+    case DW_FORM_ref4:
+        offset = cur.u32();
+        break;
+    case DW_FORM_ref8:
+        offset = cur.u64();
+        break;
+    case DW_FORM_ref_udata:
+        offset = cur.uleb128();
+        break;
+    case DW_FORM_ref_addr: {
+        offset = cur.u32();
+        auto section =
+            cu_->dwarf_info()->elf_file()->get_section_contents(".debug_info");
+        auto die_pos = section.begin() + offset;
+        auto& cus = cu_->dwarf_info()->compile_units();
+        auto cu_finder = [=](auto& cu) {
+            return cu->data().begin() <= die_pos and cu->data().end() > die_pos;
+        };
+        auto cu_for_offset = std::find_if(begin(cus), end(cus), cu_finder);
+        cursor ref_cur({die_pos, cu_for_offset->get()->data().end()});
+        return parse_die(**cu_for_offset, ref_cur);
+    }
+    default:
+        error::send("Invalid reference type");
+    }
+    cursor ref_cur({cu_->data().begin() + offset, cu_->data().end()});
+    return parse_die(*cu_, ref_cur);
+}
+
+std::string_view sdb::attr::as_string() const {
+    cursor cur({location_, cu_->data().end()});
+    switch (form_) {
+    case DW_FORM_string:
+        return cur.string();
+    case DW_FORM_strp: {
+        auto offset = cur.u32();
+        auto stab =
+            cu_->dwarf_info()->elf_file()->get_section_contents(".debug_str");
+        cursor stab_cur({stab.begin() + offset, stab.end()});
+        return stab_cur.string();
+    }
+    default:
+        error::send("Invalid string type");
+    }
+}
