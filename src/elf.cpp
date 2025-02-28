@@ -8,6 +8,7 @@ will only load necessary parts of the file when required.
 #include <cxxabi.h>
 #include <fcntl.h>
 #include <libsdb/bit.hpp>
+#include <libsdb/dwarf.hpp>
 #include <libsdb/elf.hpp>
 #include <libsdb/error.hpp>
 #include <sys/mman.h>
@@ -44,6 +45,8 @@ sdb::elf::elf(const std::filesystem::path& path) {
     build_section_map();
     parse_symbol_table();
     build_symbol_maps();
+
+    dwarf_ = std::make_unique<dwarf>(*this);
 }
 
 sdb::elf::~elf() {

@@ -548,3 +548,78 @@ bool sdb::die::contains_address(file_addr address) const {
 
     return false;
 }
+
+const sdb::compile_unit*
+sdb::dwarf::compile_unit_containing_address(file_addr address) const {
+    for (auto& cu : compile_units_) {
+        if (cu->root().contains_address(address)) {
+            return cu.get();
+        }
+    }
+    return nullptr;
+}
+
+std::optional<sdb::die>
+sdb::dwarf::function_containing_address(file_addr address) const {
+    index();
+    for (auto& [name, entry] : function_index_) {
+        cursor cur({entry.pos, entry.cu->data().end()});
+        auto d = parse_die(*entry.cu, cur);
+        if (d.contains_address(address) and
+            d.abbrev_entry()->tag == DW_TAG_subprogram) {
+            return d;
+        }
+    }
+    return std::nullopt;
+}
+
+std::vector<sdb::die> sdb::dwarf::find_functions(std::string name) const {
+    index();
+
+    std::vector<die> found;
+    auto [begin, end] = function_index_.equal_range(name);
+    std::transform(begin, end, std::back_inserter(found), [](auto& pair) {
+        auto [name, entry] = pair;
+        cursor cur({entry.pos, entry.cu->data().end()});
+        return parse_die(*entry.cu, cur);
+    });
+    return found;
+}
+
+void sdb::dwarf::index() const {
+    if (!function_index_.empty()) {
+        return;
+    }
+    for (auto& cu : compile_units_) {
+        index_die(cu->root());
+    }
+}
+
+std::optional<std::string_view> sdb::die::name() const {
+    if (contains(DW_AT_name)) {
+        return (*this)[DW_AT_name].as_string();
+    }
+    if (contains(DW_AT_specification)) {
+        return (*this)[DW_AT_specification].as_reference().name();
+    }
+    if (contains(DW_AT_abstract_origin)) {
+        return (*this)[DW_AT_abstract_origin].as_reference().name();
+    }
+    return std::nullopt;
+}
+
+void sdb::dwarf::index_die(const die& current) const {
+    bool has_range =
+        current.contains(DW_AT_low_pc) or current.contains(DW_AT_ranges);
+    bool is_function = current.abbrev_entry()->tag == DW_TAG_subprogram or
+                       current.abbrev_entry()->tag == DW_TAG_inlined_subroutine;
+    if (has_range and is_function) {
+        if (auto name = current.name(); name) {
+            index_entry entry{current.cu(), current.position()};
+            function_index_.emplace(*name, entry);
+        }
+    }
+    for (auto child : current.children()) {
+        index_die(child);
+    }
+}
