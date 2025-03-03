@@ -2,6 +2,7 @@
 #define SDB_DWARF_HPP
 
 #include <cstdint>
+#include <filesystem>
 #include <libsdb/detail/dwarf.h>
 #include <memory>
 #include <optional>
@@ -11,6 +12,45 @@
 #include <vector>
 
 namespace sdb {
+
+class attr;
+class compile_unit;
+class die;
+class elf;
+
+class line_table {
+  public:
+    struct file {
+        std::filesystem::path path;
+        std::uint64_t modification_time;
+        std::uint64_t file_length;
+    };
+    line_table(sdb::span<const std::byte> data, const compile_unit* cu,
+               bool default_is_stmt, std::int8_t line_base,
+               std::uint8_t line_range, std::uint8_t opcode_base,
+               std::vector<std::filesystem::path> include_directories,
+               std::vector<file> file_names)
+        : data_(data), cu_(cu), default_is_stmt_(default_is_stmt),
+          line_base_(line_base), line_range_(line_range),
+          opcode_base_(opcode_base),
+          include_directories_(std::move(include_directories)),
+          file_names_(std::move(file_names)) {}
+    const compile_unit& cu() const { return *cu_; }
+    const std::vector<file>& file_names() const { return file_names_; }
+    line_table(const line_table&) = delete;
+    line_table& operator=(const line_table&) = delete;
+
+  private:
+    sdb::span<const std::byte> data_;
+    const compile_unit* cu_;
+    bool default_is_stmt_;
+    std::int8_t line_base_;
+    std::uint8_t line_range_;
+    std::uint8_t opcode_base_;
+    std::vector<std::filesystem::path> include_directories_;
+    // mutable is a bit like RefCell, for Interior Mutability.
+    mutable std::vector<file> file_names_;
+};
 
 struct attr_spec {
     std::uint64_t attr;
@@ -23,11 +63,6 @@ struct abbrev {
     bool has_children;
     std::vector<attr_spec> attr_specs;
 };
-
-class attr;
-class compile_unit;
-class die;
-class elf;
 
 class range_list {
   public:
@@ -138,17 +173,18 @@ class dwarf {
 class compile_unit {
   public:
     compile_unit(dwarf& parent, span<const std::byte> data,
-                 std::size_t abbrev_offset)
-        : parent_(&parent), data_(data), abbrev_offset_(abbrev_offset) {}
+                 std::size_t abbrev_offset);
     const dwarf* dwarf_info() const { return parent_; }
     span<const std::byte> data() const { return data_; }
     const std::unordered_map<std::uint64_t, sdb::abbrev>& abbrev_table() const;
     die root() const;
+    const line_table& lines() const { return *line_table_; }
 
   private:
     dwarf* parent_;
     span<const std::byte> data_;
     std::size_t abbrev_offset_;
+    std::unique_ptr<line_table> line_table_;
 };
 
 class die {
