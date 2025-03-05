@@ -39,6 +39,11 @@ class line_table {
     const std::vector<file>& file_names() const { return file_names_; }
     line_table(const line_table&) = delete;
     line_table& operator=(const line_table&) = delete;
+    struct entry;
+
+    class iterator;
+    iterator begin() const;
+    iterator end() const;
 
   private:
     sdb::span<const std::byte> data_;
@@ -50,6 +55,58 @@ class line_table {
     std::vector<std::filesystem::path> include_directories_;
     // mutable is a bit like RefCell, for Interior Mutability.
     mutable std::vector<file> file_names_;
+};
+
+struct line_table::entry {
+    file_addr address;
+    std::uint64_t file_index = 1;
+    std::uint64_t line = 1;
+    std::uint64_t column = 0;
+    bool is_stmt;
+    bool basic_block_start = false;
+    bool end_sequence = false;
+    bool prologue_end = false;
+    bool epilogue_begin = false;
+    std::uint64_t discriminator = 0;
+    file* file_entry = nullptr;
+
+    bool operator==(const entry& rhs) const {
+        return address == rhs.address and file_index == rhs.file_index and
+               line == rhs.line and column == rhs.column and
+               discriminator == rhs.discriminator;
+    }
+};
+
+class line_table::iterator {
+  public:
+    using value_type = entry;
+    using pointer = const entry*;
+    using reference = const entry&;
+    using difference_type = std::ptrdiff_t;
+    using iterator_category = std::forward_iterator_tag;
+
+    iterator(const line_table* table_);
+
+    iterator() = default;
+    iterator(const iterator&) = default;
+    iterator& operator=(const iterator&) = default;
+
+    const line_table::entry& operator*() const { return current_; }
+    const line_table::entry* operator->() const { return &current_; }
+
+    bool operator==(const iterator& rhs) const { return pos_ == rhs.pos_; }
+    bool operator!=(const iterator& rhs) const { return pos_ != rhs.pos_; }
+
+    iterator& operator++();
+    iterator operator++(int);
+
+  private:
+    const line_table* table_;
+    line_table::entry current_;
+    line_table::entry registers_;
+    const std::byte* pos_;
+
+    bool execute_instruction();
 };
 
 struct attr_spec {
