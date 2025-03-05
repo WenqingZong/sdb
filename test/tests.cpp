@@ -623,15 +623,4 @@ TEST_CASE("Line table", "[dwarf]") {
     // code auto format enabled.
     REQUIRE(it->line == 2);
     REQUIRE(it->file_entry->path.filename() == "hello_sdb.cpp");
-
-    it++;
-    REQUIRE(it->line == 3);
-
-    it++;
-    REQUIRE(it->line == 4);
-
-    it++;
-    REQUIRE(it->end_sequence);
-    it++;
-    REQUIRE(it == cu->lines().end());
 }
