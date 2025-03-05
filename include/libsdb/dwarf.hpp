@@ -16,6 +16,7 @@ namespace sdb {
 class attr;
 class compile_unit;
 class die;
+class dwarf;
 class elf;
 
 class line_table {
@@ -59,6 +60,11 @@ class line_table {
     std::vector<std::filesystem::path> include_directories_;
     // mutable is a bit like RefCell, for Interior Mutability.
     mutable std::vector<file> file_names_;
+};
+
+struct source_location {
+    const line_table::file* file;
+    std::uint64_t line;
 };
 
 struct line_table::entry {
@@ -200,6 +206,23 @@ class attr {
     const std::byte* location_;
 };
 
+class compile_unit {
+  public:
+    compile_unit(dwarf& parent, span<const std::byte> data,
+                 std::size_t abbrev_offset);
+    const dwarf* dwarf_info() const { return parent_; }
+    span<const std::byte> data() const { return data_; }
+    const std::unordered_map<std::uint64_t, sdb::abbrev>& abbrev_table() const;
+    die root() const;
+    const line_table& lines() const { return *line_table_; }
+
+  private:
+    dwarf* parent_;
+    span<const std::byte> data_;
+    std::size_t abbrev_offset_;
+    std::unique_ptr<line_table> line_table_;
+};
+
 class dwarf {
   public:
     dwarf(const elf& parent);
@@ -217,6 +240,14 @@ class dwarf {
     std::optional<die> function_containing_address(file_addr address) const;
     std::vector<die> find_functions(std::string name) const;
 
+    line_table::iterator line_entry_at_address(file_addr address) const {
+        auto cu = compile_unit_containing_address(address);
+        if (!cu) {
+            return {};
+        }
+        return cu->lines().get_entry_by_address(address);
+    }
+
   private:
     const elf* elf_;
     std::unordered_map<std::size_t, std::unordered_map<std::uint64_t, abbrev>>
@@ -229,23 +260,6 @@ class dwarf {
         const std::byte* pos;
     };
     mutable std::unordered_multimap<std::string, index_entry> function_index_;
-};
-
-class compile_unit {
-  public:
-    compile_unit(dwarf& parent, span<const std::byte> data,
-                 std::size_t abbrev_offset);
-    const dwarf* dwarf_info() const { return parent_; }
-    span<const std::byte> data() const { return data_; }
-    const std::unordered_map<std::uint64_t, sdb::abbrev>& abbrev_table() const;
-    die root() const;
-    const line_table& lines() const { return *line_table_; }
-
-  private:
-    dwarf* parent_;
-    span<const std::byte> data_;
-    std::size_t abbrev_offset_;
-    std::unique_ptr<line_table> line_table_;
 };
 
 class die {
@@ -273,6 +287,10 @@ class die {
     bool contains_address(file_addr address) const;
 
     std::optional<std::string_view> name() const;
+
+    source_location location() const;
+    const line_table::file& file() const;
+    std::uint64_t line() const;
 
   private:
     const std::byte* pos_ = nullptr;

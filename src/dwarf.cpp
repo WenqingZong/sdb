@@ -892,3 +892,22 @@ sdb::line_table::get_entries_by_line(std::filesystem::path path,
 
     return entries;
 }
+
+sdb::source_location sdb::die::location() const { return {&file(), line()}; }
+
+const sdb::line_table::file& sdb::die::file() const {
+    std::uint64_t idx;
+    if (abbrev_->tag == DW_TAG_inlined_subroutine) {
+        idx = (*this)[DW_AT_call_file].as_int();
+    } else {
+        idx = (*this)[DW_AT_decl_file].as_int();
+    }
+    return this->cu_->lines().file_names()[idx - 1];
+}
+
+std::uint64_t sdb::die::line() const {
+    if (abbrev_->tag == DW_TAG_inlined_subroutine) {
+        return (*this)[DW_AT_call_line].as_int();
+    }
+    return (*this)[DW_AT_decl_line].as_int();
+}
