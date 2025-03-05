@@ -45,6 +45,10 @@ class line_table {
     iterator begin() const;
     iterator end() const;
 
+    iterator get_entry_by_address(file_addr address) const;
+    std::vector<iterator> get_entries_by_line(std::filesystem::path path,
+                                              std::size_t line) const;
+
   private:
     sdb::span<const std::byte> data_;
     const compile_unit* cu_;
