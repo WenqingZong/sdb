@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <libsdb/detail/dwarf.h>
+#include <libsdb/types.hpp>
 #include <memory>
 #include <optional>
 #include <string>
@@ -247,6 +248,8 @@ class dwarf {
         }
         return cu->lines().get_entry_by_address(address);
     }
+
+    std::vector<die> inline_stack_at_address(file_addr address) const;
 
   private:
     const elf* elf_;

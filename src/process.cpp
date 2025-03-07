@@ -4,6 +4,7 @@
 #include <libsdb/error.hpp>
 #include <libsdb/pipe.hpp>
 #include <libsdb/process.hpp>
+#include <libsdb/target.hpp>
 #include <sys/personality.h>
 #include <sys/ptrace.h>
 #include <sys/types.h>
@@ -176,6 +177,9 @@ sdb::stop_reason sdb::process::wait_on_signal() {
             } else if (reason.trap_reason == trap_type::syscall) {
                 reason = maybe_resume_from_syscall(reason);
             }
+        }
+        if (target_) {
+            target_->notify_stop(reason);
         }
     }
 

@@ -66,6 +66,8 @@ class syscall_catch_policy {
     std::vector<int> to_catch_;
 };
 
+class target;
+
 class process {
   public:
     void write_fprs(const user_fpregs_struct& fprs);
@@ -147,6 +149,8 @@ class process {
     // auxv for auxiliary vector
     std::unordered_map<int, std::uint64_t> get_auxv() const;
 
+    void set_target(target* tgt) { target_ = tgt; }
+
   private:
     pid_t pid_ = 0;
     bool terminate_on_end_ = true;
@@ -177,6 +181,8 @@ class process {
     bool expecting_syscall_exit_ = false;
 
     sdb::stop_reason maybe_resume_from_syscall(const stop_reason& reason);
+
+    target* target_ = nullptr;
 };
 
 } // namespace sdb

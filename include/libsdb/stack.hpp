@@ -1,0 +1,25 @@
+#ifndef SDB_STACK_HPP
+#define SDB_STACK_HPP
+
+#include <libsdb/dwarf.hpp>
+#include <vector>
+
+namespace sdb {
+
+class target;
+class stack {
+  public:
+    stack(target* tgt) : target_(tgt) {}
+    void reset_inline_height();
+    std::vector<sdb::die> inline_stack_at_pc() const;
+    std::uint32_t inline_height() const { return inline_height_; }
+    const target& get_target() const { return *target_; }
+
+  private:
+    target* target_ = nullptr;
+    std::uint32_t inline_height_ = 0;
+};
+
+} // namespace sdb
+
+#endif
