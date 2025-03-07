@@ -1,6 +1,7 @@
 #ifndef SDB_TARGET_HPP
 #define SDB_TARGET_HPP
 
+#include <libsdb/dwarf.hpp>
 #include <libsdb/elf.hpp>
 #include <libsdb/process.hpp>
 #include <libsdb/stack.hpp>
@@ -29,6 +30,13 @@ class target {
 
     stack& get_stack() { return stack_; }
     const stack& get_stack() const { return stack_; }
+
+    sdb::stop_reason step_in();
+    sdb::stop_reason step_out();
+    sdb::stop_reason step_over();
+
+    sdb::line_table::iterator line_entry_at_pc() const;
+    sdb::stop_reason run_until_address(virt_addr address);
 
   private:
     target(std::unique_ptr<process> proc, std::unique_ptr<elf> obj)

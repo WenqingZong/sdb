@@ -1,6 +1,7 @@
 #ifndef SDB_PROCESS_HPP
 #define SDB_PROCESS_HPP
 
+#include <csignal>
 #include <cstdint>
 #include <filesystem>
 #include <libsdb/bit.hpp>
@@ -42,6 +43,23 @@ struct stop_reason {
     std::uint8_t info;
     std::optional<trap_type> trap_reason;
     std::optional<syscall_information> syscall_info;
+
+    stop_reason() = default;
+    stop_reason(process_state reason, std::uint8_t info,
+                std::optional<trap_type> trap_reason = std::nullopt,
+                std::optional<syscall_information> syscall_info = std::nullopt)
+        : reason(reason), info(info), trap_reason(trap_reason),
+          syscall_info(syscall_info) {}
+
+    bool is_step() const {
+        return reason == process_state::stopped and info == SIGTRAP and
+               trap_reason == trap_type::single_step;
+    }
+    bool is_breakpoint() const {
+        return reason == process_state::stopped and info == SIGTRAP and
+               (trap_reason == trap_type::software_break or
+                trap_reason == trap_type::hardware_break);
+    }
 };
 
 class syscall_catch_policy {
