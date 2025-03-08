@@ -6,6 +6,7 @@
 #include <libsdb/types.hpp>
 
 namespace sdb {
+class breakpoint;
 class process;
 
 class breakpoint_site {
@@ -44,6 +45,11 @@ class breakpoint_site {
     bool is_hardware_;
     bool is_internal_;
     int hardware_register_index_ = -1;
+    breakpoint_site(breakpoint* parent, id_type id, process& proc,
+                    virt_addr address, bool is_hardware = false,
+                    bool is_internal = false);
+    breakpoint* parent_ = nullptr;
+    ;
 };
 } // namespace sdb
 

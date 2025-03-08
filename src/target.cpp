@@ -1,4 +1,5 @@
 #include <csignal>
+#include <libsdb/bit.hpp>
 #include <libsdb/disassembler.hpp>
 #include <libsdb/target.hpp>
 #include <libsdb/types.hpp>
@@ -146,4 +147,26 @@ sdb::stop_reason sdb::target::step_over() {
               line_entry_at_pc()->end_sequence) and
              line_entry_at_pc() != line_table::iterator{});
     return reason;
+}
+
+sdb::stop_reason sdb::target::step_out() {
+    auto& stack = get_stack();
+    auto inline_stack = stack.inline_stack_at_pc();
+    auto has_inline_frames = inline_stack.size() > 1;
+    auto at_inline_frame = stack.inline_height() < inline_stack.size() - 1;
+
+    if (has_inline_frames and at_inline_frame) {
+        auto current_frame =
+            inline_stack[inline_stack.size() - stack.inline_height() - 1];
+        auto return_address = current_frame.high_pc().to_virt_addr();
+        return run_until_address(return_address);
+    }
+
+    auto frame_pointer = process_->get_registers().read_by_id_as<std::uint64_t>(
+        register_id::rbp);
+
+    auto return_address =
+        process_->read_memory_as<std::uint64_t>(virt_addr{frame_pointer + 8});
+
+    return run_until_address(virt_addr{return_address});
 }
