@@ -170,3 +170,20 @@ sdb::stop_reason sdb::target::step_out() {
 
     return run_until_address(virt_addr{return_address});
 }
+
+sdb::target::find_functions_result
+sdb::target::find_functions(std::string name) const {
+    find_functions_result result;
+
+    auto dwarf_found = elf_->get_dwarf().find_functions(name);
+    if (dwarf_found.empty()) {
+        auto elf_found = elf_->get_symbols_by_name(name);
+        for (auto sym : elf_found) {
+            result.elf_functions.push_back(std::pair{elf_.get(), sym});
+        }
+    } else {
+        result.dwarf_functions.insert(result.dwarf_functions.end(),
+                                      dwarf_found.begin(), dwarf_found.end());
+    }
+    return result;
+}

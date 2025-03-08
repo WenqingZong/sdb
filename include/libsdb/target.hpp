@@ -38,6 +38,12 @@ class target {
     sdb::line_table::iterator line_entry_at_pc() const;
     sdb::stop_reason run_until_address(virt_addr address);
 
+    struct find_functions_result {
+        std::vector<die> dwarf_functions;
+        std::vector<std::pair<const elf*, const Elf64_Sym*>> elf_functions;
+    };
+    find_functions_result find_functions(std::string name) const;
+
   private:
     target(std::unique_ptr<process> proc, std::unique_ptr<elf> obj)
         : process_(std::move(proc)), elf_(std::move(obj)), stack_(this) {}
