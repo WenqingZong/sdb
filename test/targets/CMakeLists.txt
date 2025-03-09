@@ -16,6 +16,7 @@ add_test_cpp_target(hello_sdb)
 add_test_cpp_target(memory)
 add_test_cpp_target(anti_debugger)
 add_test_cpp_target(overloaded)
+add_test_cpp_target(step)
 
 add_test_asm_target(reg_write)
 add_test_asm_target(reg_read)
