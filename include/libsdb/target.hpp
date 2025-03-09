@@ -1,6 +1,7 @@
 #ifndef SDB_TARGET_HPP
 #define SDB_TARGET_HPP
 
+#include <libsdb/breakpoint.hpp>
 #include <libsdb/dwarf.hpp>
 #include <libsdb/elf.hpp>
 #include <libsdb/process.hpp>
@@ -44,6 +45,23 @@ class target {
     };
     find_functions_result find_functions(std::string name) const;
 
+    breakpoint& create_address_breakpoint(virt_addr address,
+                                          bool hardware = false,
+                                          bool internal = false);
+    breakpoint& create_function_breakpoint(std::string function_name,
+                                           bool hardware = false,
+                                           bool internal = false);
+    breakpoint& create_line_breakpoint(std::filesystem::path file,
+                                       std::size_t line, bool hardware = false,
+                                       bool internal = false);
+
+    stoppoint_collection<breakpoint>& breakpoints() { return breakpoints_; }
+    const stoppoint_collection<breakpoint>& breakpoints() const {
+        return breakpoints_;
+    }
+
+    std::string function_name_at_address(virt_addr address) const;
+
   private:
     target(std::unique_ptr<process> proc, std::unique_ptr<elf> obj)
         : process_(std::move(proc)), elf_(std::move(obj)), stack_(this) {}
@@ -51,6 +69,7 @@ class target {
     std::unique_ptr<elf> elf_;
 
     stack stack_;
+    stoppoint_collection<breakpoint> breakpoints_;
 };
 } // namespace sdb
 
