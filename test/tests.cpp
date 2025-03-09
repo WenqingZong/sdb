@@ -624,3 +624,46 @@ TEST_CASE("Line table", "[dwarf]") {
     REQUIRE(it->line == 2);
     REQUIRE(it->file_entry->path.filename() == "hello_sdb.cpp");
 }
+
+TEST_CASE("Source-level breakpoints", "[breakpoint]") {
+    auto dev_null = open("/dev/null", O_WRONLY);
+    auto target = target::launch("./build/test/targets/overloaded", dev_null);
+    auto& proc = target->get_process();
+
+    target->create_line_breakpoint("overloaded.cpp", 10).enable();
+
+    proc.resume();
+    proc.wait_on_signal();
+
+    auto entry = target->line_entry_at_pc();
+    REQUIRE(entry->file_entry->path.filename() == "overloaded.cpp");
+    REQUIRE(entry->line == 10);
+
+    auto& bkpt = target->create_function_breakpoint("print_type");
+    bkpt.enable();
+
+    sdb::breakpoint_site* lowest_bkpt = nullptr;
+    bkpt.breakpoint_sites().for_each([&lowest_bkpt](auto& site) {
+        if (lowest_bkpt == nullptr or
+            site.address().addr() < lowest_bkpt->address().addr()) {
+            lowest_bkpt = &site;
+        }
+    });
+    lowest_bkpt->disable();
+
+    proc.resume();
+    proc.wait_on_signal();
+
+    REQUIRE(target->line_entry_at_pc()->line == 6);
+
+    proc.resume();
+    proc.wait_on_signal();
+
+    REQUIRE(target->line_entry_at_pc()->line == 8);
+
+    proc.resume();
+    auto reason = proc.wait_on_signal();
+
+    REQUIRE(reason.reason == sdb::process_state::exited);
+    close(dev_null);
+}

@@ -518,12 +518,6 @@ void handle_breakpoint_command(sdb::target& target,
         return;
     }
 
-    auto id = sdb::to_integral<sdb::breakpoint_site::id_type>(args[2]);
-    if (!id) {
-        std::cerr << "Command expects breakpoint id";
-        return;
-    }
-
     handle_breakpoint_toggle(target, args);
 }
 
