@@ -478,10 +478,51 @@ parse_fde(const sdb::call_frame_information& cfi, cursor cur) {
     return {length, &cie, initial_location, address_range, instructions};
 }
 
+sdb::call_frame_information::eh_hdr parse_eh_hdr(sdb::dwarf& dwarf) {
+    auto elf = dwarf.elf_file();
+    auto eh_hdr_start = *elf->get_section_start_address(".eh_frame_hdr");
+    auto text_section_start = *elf->get_section_start_address(".text");
+    auto eh_hdr_data = elf->get_section_contents(".eh_frame_hdr");
+    cursor cur(eh_hdr_data);
+
+    auto start = cur.position();
+    auto version = cur.u8();
+    auto eh_frame_ptr_enc = cur.u8();
+    auto fde_count_enc = cur.u8();
+    auto table_enc = cur.u8();
+    (void)parse_eh_frame_pointer_with_base(cur, eh_frame_ptr_enc, 0);
+    auto fde_count = parse_eh_frame_pointer_with_base(cur, fde_count_enc, 0);
+
+    auto search_table = cur.position();
+    return {start, search_table, fde_count, table_enc, nullptr};
+}
+
+std::size_t eh_frame_pointer_encoding_size(std::uint8_t encoding) {
+    switch (encoding & 0x7) {
+    case DW_EH_PE_absptr:
+        return 8;
+    case DW_EH_PE_udata2:
+        return 2;
+    case DW_EH_PE_udata4:
+        return 4;
+    case DW_EH_PE_udata8:
+        return 8;
+    default:
+        sdb::error::send("Invalid pointer encoding");
+    }
+}
+
+std::unique_ptr<sdb::call_frame_information>
+parse_call_frame_information(sdb::dwarf& dwarf) {
+    auto eh_hdr = parse_eh_hdr(dwarf);
+    return std::make_unique<sdb::call_frame_information>(&dwarf, eh_hdr);
+}
+
 } // namespace
 
 sdb::dwarf::dwarf(const sdb::elf& parent) : elf_(&parent) {
     compile_units_ = parse_compile_units(*this, parent);
+    cfi_ = parse_call_frame_information(*this);
 }
 
 const std::unordered_map<std::uint64_t, sdb::abbrev>&
@@ -1096,4 +1137,48 @@ sdb::call_frame_information::get_cie(file_offset at) const {
     auto cie = parse_cie(cur);
     cie_map_.emplace(offset, cie);
     return cie_map_.at(offset);
+}
+
+const std::byte*
+sdb::call_frame_information::eh_hdr::operator[](file_addr address) const {
+    auto elf = address.elf_file();
+    auto text_section_start = *elf->get_section_start_address(".text");
+    auto encoding_size = eh_frame_pointer_encoding_size(encoding);
+    auto row_size = encoding_size * 2;
+
+    std::size_t low = 0;
+    std::size_t high = count - 1;
+    while (low <= high) {
+        std::size_t mid = (low + high) / 2;
+
+        cursor cur(
+            {search_table + mid * row_size, search_table + count * row_size});
+        auto current_offset = elf->data_pointer_as_file_offset(cur.position());
+        auto eh_hdr_offset = elf->data_pointer_as_file_offset(start);
+        auto entry_address = parse_eh_frame_pointer(
+            *elf, cur, encoding, current_offset.off(),
+            text_section_start.addr(), eh_hdr_offset.off(), 0);
+
+        if (entry_address < address.addr()) {
+            low = mid + 1;
+        } else if (entry_address > address.addr()) {
+            if (mid == 0) {
+                sdb::error::send("Address not found in eh_hdr");
+            }
+            high = mid - 1;
+        } else {
+            high = mid;
+            break;
+        }
+    }
+
+    cursor cur({search_table + high * row_size + encoding_size,
+                search_table + count * row_size});
+    auto current_offset = elf->data_pointer_as_file_offset(cur.position());
+    auto eh_hdr_offset = elf->data_pointer_as_file_offset(start);
+    auto fde_offset_int = parse_eh_frame_pointer(
+        *elf, cur, encoding, current_offset.off(), text_section_start.addr(),
+        eh_hdr_offset.off(), 0);
+    sdb::file_offset fde_offset{*elf, fde_offset_int};
+    return elf->file_offset_as_data_pointer(fde_offset);
 }
