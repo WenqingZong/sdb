@@ -265,6 +265,40 @@ class dwarf {
     mutable std::unordered_multimap<std::string, index_entry> function_index_;
 };
 
+class call_frame_information {
+
+  public:
+    struct common_information_entry {
+        std::uint32_t length;
+        std::uint64_t code_alignment_factor;
+        std::int64_t data_alignment_factor;
+        bool fde_has_augmentation;
+        std::uint8_t fde_pointer_encoding;
+        span<const std::byte> instructions;
+    };
+    call_frame_information() = delete;
+    call_frame_information(const call_frame_information&) = delete;
+    call_frame_information& operator=(const call_frame_information&) = delete;
+
+    const dwarf& dwarf_info() const { return *dwarf_; }
+
+    const common_information_entry& get_cie(file_offset at) const;
+
+    struct frame_description_entry {
+        std::uint32_t length;
+        const common_information_entry* cie;
+        file_addr initial_location;
+        std::uint64_t address_range;
+        span<const std::byte> instructions;
+    };
+
+  private:
+    const dwarf* dwarf_;
+    // mutable behaves a bit like internal mutability in rust.
+    mutable std::unordered_map<std::uint32_t, common_information_entry>
+        cie_map_;
+};
+
 class die {
 
   public:
