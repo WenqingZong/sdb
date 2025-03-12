@@ -225,6 +225,28 @@ parse_compile_units(sdb::dwarf& dwarf, const sdb::elf& obj) {
     return units;
 }
 
+sdb::die parse_die(const sdb::compile_unit& cu, cursor cur) {
+    auto pos = cur.position();
+    auto abbrev_code = cur.uleb128();
+
+    if (abbrev_code == 0) {
+        auto next = cur.position();
+        return sdb::die{next};
+    }
+
+    auto& abbrev_table = cu.abbrev_table();
+    auto& abbrev = abbrev_table.at(abbrev_code);
+
+    std::vector<const std::byte*> attr_locs;
+    attr_locs.reserve(abbrev.attr_specs.size());
+    for (auto& attr : abbrev.attr_specs) {
+        attr_locs.push_back(cur.position());
+        cur.skip_form(attr.form);
+    }
+    auto next = cur.position();
+    return sdb::die(pos, &cu, &abbrev, std::move(attr_locs), next);
+}
+
 sdb::line_table::file parse_line_table_file(
     cursor& cur, std::filesystem::path compilation_dir,
     const std::vector<std::filesystem::path>& include_directories) {
@@ -327,28 +349,6 @@ sdb::dwarf::get_abbrev_table(std::size_t offset) {
 const std::unordered_map<std::uint64_t, sdb::abbrev>&
 sdb::compile_unit::abbrev_table() const {
     return parent_->get_abbrev_table(abbrev_offset_);
-}
-
-sdb::die parse_die(const sdb::compile_unit& cu, cursor cur) {
-    auto pos = cur.position();
-    auto abbrev_code = cur.uleb128();
-
-    if (abbrev_code == 0) {
-        auto next = cur.position();
-        return sdb::die{next};
-    }
-
-    auto& abbrev_table = cu.abbrev_table();
-    auto& abbrev = abbrev_table.at(abbrev_code);
-
-    std::vector<const std::byte*> attr_locs;
-    attr_locs.reserve(abbrev.attr_specs.size());
-    for (auto& attr : abbrev.attr_specs) {
-        attr_locs.push_back(cur.position());
-        cur.skip_form(attr.form);
-    }
-    auto next = cur.position();
-    return sdb::die(pos, &cu, &abbrev, std::move(attr_locs), next);
 }
 
 sdb::die sdb::compile_unit::root() const {

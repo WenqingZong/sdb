@@ -1,7 +1,6 @@
 #include <libsdb/error.hpp>
 #include <libsdb/process.hpp>
 #include <libsdb/watchpoint.hpp>
-
 #include <utility>
 
 namespace {

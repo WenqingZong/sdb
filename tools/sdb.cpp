@@ -777,9 +777,7 @@ void handle_command(std::unique_ptr<sdb::target>& target,
         std::cerr << "Unknown command\n";
     }
 }
-} // namespace
 
-namespace {
 std::unique_ptr<sdb::target> attach(int argc, const char* argv[]) {
     // Passing PID
     if (argc == 3 && argv[1] == std::string_view("-p")) {
@@ -795,7 +793,6 @@ std::unique_ptr<sdb::target> attach(int argc, const char* argv[]) {
         return target;
     }
 }
-} // namespace
 
 void main_loop(std::unique_ptr<sdb::target>& target) {
     char* line = nullptr;
@@ -822,6 +819,7 @@ void main_loop(std::unique_ptr<sdb::target>& target) {
         }
     }
 }
+} // namespace
 
 int main(int argc, const char* argv[]) {
     if (argc == 1) {

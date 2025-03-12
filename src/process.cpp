@@ -12,6 +12,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+namespace {
+
 void exit_with_perror(sdb::pipe& channel, std::string const& prefix) {
     auto message = prefix + ": " + std::strerror(errno);
     channel.write(reinterpret_cast<std::byte*>(message.data()), message.size());
@@ -23,6 +25,45 @@ void set_ptrace_options(pid_t pid) {
         sdb::error::send_errno("Failed to set TRACESYSGOOD option");
     }
 }
+
+std::uint64_t encode_hardware_stoppoint_mode(sdb::stoppoint_mode mode) {
+    switch (mode) {
+    case sdb::stoppoint_mode::write:
+        return 0b01;
+    case sdb::stoppoint_mode::read_write:
+        return 0b11;
+    case sdb::stoppoint_mode::execute:
+        return 0b00;
+    default:
+        sdb::error::send("Invalid stoppoint mode");
+    }
+}
+
+std::uint64_t encode_hardware_stoppoint_size(std::size_t size) {
+    switch (size) {
+    case 1:
+        return 0b00;
+    case 2:
+        return 0b01;
+    case 4:
+        return 0b11;
+    case 8:
+        return 0b10;
+    default:
+        sdb::error::send("Invalid stoppoint size");
+    }
+}
+
+int find_free_stoppoint_register(std::uint64_t control_register) {
+    for (auto i = 0; i < 4; i++) {
+        if ((control_register & (0b11 << (i * 2))) == 0) {
+            return i;
+        }
+    }
+    sdb::error::send("No remaining hardware debug registers");
+}
+
+} // namespace
 
 std::unique_ptr<sdb::process>
 sdb::process::launch(std::filesystem::path path, bool debug,
@@ -316,43 +357,6 @@ void sdb::process::write_memory(virt_addr address, span<const std::byte> data) {
         }
         written += 8;
     }
-}
-
-std::uint64_t encode_hardware_stoppoint_mode(sdb::stoppoint_mode mode) {
-    switch (mode) {
-    case sdb::stoppoint_mode::write:
-        return 0b01;
-    case sdb::stoppoint_mode::read_write:
-        return 0b11;
-    case sdb::stoppoint_mode::execute:
-        return 0b00;
-    default:
-        sdb::error::send("Invalid stoppoint mode");
-    }
-}
-
-std::uint64_t encode_hardware_stoppoint_size(std::size_t size) {
-    switch (size) {
-    case 1:
-        return 0b00;
-    case 2:
-        return 0b01;
-    case 4:
-        return 0b11;
-    case 8:
-        return 0b10;
-    default:
-        sdb::error::send("Invalid stoppoint size");
-    }
-}
-
-int find_free_stoppoint_register(std::uint64_t control_register) {
-    for (auto i = 0; i < 4; i++) {
-        if ((control_register & (0b11 << (i * 2))) == 0) {
-            return i;
-        }
-    }
-    sdb::error::send("No remaining hardware debug registers");
 }
 
 int sdb::process::set_hardware_breakpoint(breakpoint_site::id_type id,
