@@ -5,6 +5,7 @@
 #include <libsdb/error.hpp>
 #include <libsdb/types.hpp>
 #include <string_view>
+#include <variant>
 
 namespace {
 
@@ -517,6 +518,37 @@ parse_call_frame_information(sdb::dwarf& dwarf) {
     auto eh_hdr = parse_eh_hdr(dwarf);
     return std::make_unique<sdb::call_frame_information>(&dwarf, eh_hdr);
 }
+
+struct undefined_rule {};
+struct same_rule {};
+struct offset_rule {
+    std::int64_t offset;
+};
+struct val_offset_rule {
+    std::int64_t offset;
+};
+struct register_rule {
+    std::uint32_t reg;
+};
+struct cfa_register_rule {
+    std::uint32_t reg;
+    std::uint64_t offset;
+};
+
+struct unwind_context {
+    // Initialize the cursor with a null span.
+    cursor cur{{nullptr, nullptr}};
+    sdb::file_addr location;
+    cfa_register_rule cfa_rule;
+
+    // std::variant is a bit like union in C.
+    using rule = std::variant<undefined_rule, same_rule, offset_rule,
+                              val_offset_rule, register_rule>;
+    using ruleset = std::unordered_map<std::uint32_t, rule>;
+    ruleset cie_register_rules;
+    ruleset register_rules;
+    std::vector<std::pair<ruleset, cfa_register_rule>> rule_stack;
+};
 
 } // namespace
 
