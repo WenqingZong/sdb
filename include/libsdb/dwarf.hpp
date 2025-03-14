@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <libsdb/detail/dwarf.h>
+#include <libsdb/registers.hpp>
 #include <libsdb/types.hpp>
 #include <memory>
 #include <optional>
@@ -19,6 +20,7 @@ class compile_unit;
 class die;
 class dwarf;
 class elf;
+class process;
 
 class line_table {
   public:
@@ -264,6 +266,8 @@ class call_frame_information {
         : dwarf_(dwarf), eh_hdr_(hdr) {
         eh_hdr_.parent = this;
     }
+
+    registers unwind(const process& proc, file_addr pc, registers& regs) const;
 
   private:
     const dwarf* dwarf_;
