@@ -5,6 +5,8 @@
 #include <libsdb/types.hpp>
 #include <vector>
 
+#include <iostream>
+
 namespace sdb {
 
 struct stack_frame {
@@ -25,9 +27,7 @@ class stack {
     std::uint32_t inline_height() const { return inline_height_; }
     const target& get_target() const { return *target_; }
 
-    void simulate_inlined_step_in() { inline_height_--; }
-
-    void simulated_inlined_step_in() {
+    void simulate_inlined_step_in() {
         inline_height_--;
         current_frame_ = inline_height_;
     }
