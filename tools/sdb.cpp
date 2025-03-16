@@ -205,21 +205,20 @@ void print_source(const std::filesystem::path& path, std::uint64_t line,
     std::cout << std::endl;
 }
 
+void print_code_location(sdb::target& target) {
+    if (target.get_stack().has_frames()) {
+        auto& frame = target.get_stack().current_frame();
+        print_source(frame.location.file->path, frame.location.line, 3);
+    } else {
+        print_disassembly(target.get_process(), target.get_process().get_pc(),
+                          5);
+    }
+}
+
 void handle_stop(sdb::target& target, sdb::stop_reason reason) {
     print_stop_reason(target, reason);
     if (reason.reason == sdb::process_state::stopped) {
-        if (target.get_stack().inline_height() > 0) {
-            auto stack = target.get_stack().inline_stack_at_pc();
-            auto frame =
-                stack[stack.size() - target.get_stack().inline_height()];
-            print_source(frame.file().path, frame.line(), 3);
-        } else if (auto entry = target.line_entry_at_pc();
-                   entry != sdb::line_table::iterator()) {
-            print_source(entry->file_entry->path, entry->line, 3);
-        } else {
-            print_disassembly(target.get_process(),
-                              target.get_process().get_pc(), 5);
-        }
+        print_code_location(target);
     }
 }
 
@@ -231,12 +230,14 @@ Available commands:
     catchpoint  - Commands for operating on catchpoints
     continue    - Resume the process
     disassemble - Disassemble machine code to assembly
+    down        - Select the stack frame below the current one
     finish      - Step-out
     memory      - Commands for operating on memory
     next        - Step-over
     register    - Commands for operating on registers
     step        - Step-in
     stepi       - Single instruction step
+    up          - Select the stack frame above the current one
     watchpoint  - Commands for operating on watchpoints
 )";
     } else if (is_prefix(args[1], "register")) {
@@ -291,7 +292,23 @@ Available commands:
     }
 }
 
-void handle_register_read(sdb::process& process,
+void print_backtrace(const sdb::target& target) {
+    auto& stack = target.get_stack();
+    auto i = 0;
+    for (auto& frame : stack.frames()) {
+        auto pc = frame.backtrace_report_address;
+        auto func_name = target.function_name_at_address(pc);
+
+        std::string message = i == stack.current_frame_index() ? "*" : " ";
+        message += fmt::format("[{}]: {:#x} {}", i++, pc.addr(), func_name);
+        if (frame.inlined) {
+            message += fmt::format(" [inlined] {}", *frame.func_die.name());
+        }
+        fmt::print("{}\n", message);
+    }
+}
+
+void handle_register_read(sdb::target& target,
                           const std::vector<std::string>& args) {
     auto format = [](auto t) {
         if constexpr (std::is_floating_point_v<decltype(t)>) {
@@ -303,22 +320,26 @@ void handle_register_read(sdb::process& process,
         }
     };
 
+    auto& regs = target.get_stack().regs();
+    auto print_register_value = [&](auto info) {
+        if (regs.is_undefined(info.id)) {
+            fmt::print("{}:\tundefined\n", info.name);
+        } else {
+            auto value = regs.read(info);
+            fmt::print("{}:\t{}\n", info.name, std::visit(format, value));
+        }
+    };
+
     if (args.size() == 2 or (args.size() == 3 and args[2] == "all")) {
         for (auto& info : sdb::g_register_infos) {
-            auto should_print =
-                (args.size() == 3 or info.type == sdb::register_type::gpr) and
-                info.name != "orig_rax";
-            if (!should_print) {
-                continue;
+            if (args.size() == 3 or info.type == sdb::register_type::gpr) {
+                print_register_value(info);
             }
-            auto value = process.get_registers().read(info);
-            fmt::print("{}:\t{}\n", info.name, std::visit(format, value));
         }
     } else if (args.size() == 3) {
         try {
             auto info = sdb::register_info_by_name(args[2]);
-            auto value = process.get_registers().read(info);
-            fmt::print("{}:\t{}\n", info.name, std::visit(format, value));
+            print_register_value(info);
         } catch (sdb::error& err) {
             std::cerr << "No such register\n";
             return;
@@ -375,7 +396,7 @@ void handle_register_write(sdb::process& process,
     }
 }
 
-void handle_register_command(sdb::process& process,
+void handle_register_command(sdb::target& target,
                              const std::vector<std::string>& args) {
     if (args.size() < 2) {
         print_help({"help", "register"});
@@ -383,9 +404,9 @@ void handle_register_command(sdb::process& process,
     }
 
     if (is_prefix(args[1], "read")) {
-        handle_register_read(process, args);
+        handle_register_read(target, args);
     } else if (is_prefix(args[1], "write")) {
-        handle_register_write(process, args);
+        handle_register_write(target.get_process(), args);
     } else {
         print_help({"help", "register"});
     }
@@ -750,7 +771,7 @@ void handle_command(std::unique_ptr<sdb::target>& target,
     } else if (is_prefix(command, "help")) {
         print_help(args);
     } else if (is_prefix(command, "register")) {
-        handle_register_command(*process, args);
+        handle_register_command(*target, args);
     } else if (is_prefix(command, "breakpoint")) {
         handle_breakpoint_command(*target, args);
     } else if (is_prefix(command, "memory")) {
@@ -773,6 +794,14 @@ void handle_command(std::unique_ptr<sdb::target>& target,
     } else if (is_prefix(command, "stepi")) {
         auto reason = process->step_instruction();
         handle_stop(*target, reason);
+    } else if (is_prefix(command, "up")) {
+        target->get_stack().up();
+        print_code_location(*target);
+    } else if (is_prefix(command, "down")) {
+        target->get_stack().down();
+        print_code_location(*target);
+    } else if (is_prefix(command, "backtrace")) {
+        print_backtrace(*target);
     } else {
         std::cerr << "Unknown command\n";
     }
