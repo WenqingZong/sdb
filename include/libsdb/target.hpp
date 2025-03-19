@@ -23,8 +23,6 @@ class target {
 
     process& get_process() { return *process_; }
     const process& get_process() const { return *process_; }
-    elf& get_elf() { return *elf_; }
-    const elf& get_elf() const { return *elf_; }
 
     void notify_stop(const sdb::stop_reason& reason);
 
@@ -76,12 +74,10 @@ class target {
 
   private:
     target(std::unique_ptr<process> proc, std::unique_ptr<elf> obj)
-        : process_(std::move(proc)), elf_(std::move(obj)), stack_(this),
-          main_elf_(obj.get()) {
+        : process_(std::move(proc)), stack_(this), main_elf_(obj.get()) {
         elves_.push(std::move(obj));
     }
     std::unique_ptr<process> process_;
-    std::unique_ptr<elf> elf_;
 
     stack stack_;
     stoppoint_collection<breakpoint> breakpoints_;
