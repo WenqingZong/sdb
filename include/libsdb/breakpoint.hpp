@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <libsdb/breakpoint_site.hpp>
 #include <libsdb/stoppoint_collection.hpp>
 #include <libsdb/types.hpp>
@@ -46,6 +47,17 @@ class breakpoint {
         return !breakpoint_sites_.get_in_region(low, high).empty();
     }
 
+    void install_hit_handler(std::function<bool(void)> on_hit) {
+        on_hit_ = std::move(on_hit);
+    }
+
+    bool notify_hit() const {
+        if (on_hit_) {
+            return on_hit_();
+        }
+        return false;
+    }
+
   protected:
     friend target;
     breakpoint(target& tgt, bool is_hardware = false, bool is_internal = false);
@@ -56,6 +68,8 @@ class breakpoint {
     bool is_internal_ = false;
     stoppoint_collection<breakpoint_site, false> breakpoint_sites_;
     breakpoint_site::id_type next_site_id_ = 1;
+
+    std::function<bool(void)> on_hit_;
 };
 
 class function_breakpoint : public breakpoint {

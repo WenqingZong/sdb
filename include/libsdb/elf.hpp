@@ -6,6 +6,7 @@
 #include <libsdb/types.hpp>
 #include <map>
 #include <optional>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -94,6 +95,42 @@ class elf {
 
     std::unique_ptr<dwarf> dwarf_;
 };
+
+class elf_collection {
+
+  public:
+    void push(std::unique_ptr<elf> elf) { elves_.push_back(std::move(elf)); }
+
+    // So here is function declaration
+    template <class F> void for_each(F f);
+    template <class F> void for_each(F f) const;
+
+    const elf* get_elf_containing_address(virt_addr address) const;
+    const elf* get_elf_by_path(std::filesystem::path path) const;
+    const elf* get_elf_by_filename(std::string_view name) const;
+
+  private:
+    std::vector<std::unique_ptr<elf>> elves_;
+};
+
+/*
+In C++, the compiler needs to have access to the full definition of a template
+function in order to instantiate it correctly. This means that the template
+function definition must be available wherever it's being called.
+
+And here is function definitioin.
+*/
+template <class F> void elf_collection::for_each(F f) {
+    for (auto& elf : elves_) {
+        f(*elf);
+    }
+}
+
+template <class F> void elf_collection::for_each(F f) const {
+    for (const auto& elf : elves_) {
+        f(*elf);
+    }
+}
 
 } // namespace sdb
 

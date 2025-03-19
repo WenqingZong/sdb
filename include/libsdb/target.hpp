@@ -6,6 +6,7 @@
 #include <libsdb/elf.hpp>
 #include <libsdb/process.hpp>
 #include <libsdb/stack.hpp>
+#include <link.h>
 #include <memory>
 
 namespace sdb {
@@ -62,14 +63,35 @@ class target {
 
     std::string function_name_at_address(virt_addr address) const;
 
+    std::optional<r_debug> read_dynamic_linker_rendezvous() const;
+
+    elf_collection& get_elves() { return elves_; }
+    const elf_collection& get_elves() const { return elves_; }
+    elf& get_main_elf() { return *main_elf_; }
+    const elf& get_main_elf() const { return *main_elf_; }
+
+    std::vector<line_table::iterator>
+    get_line_entries_by_line(std::filesystem::path path,
+                             std::size_t line) const;
+
   private:
     target(std::unique_ptr<process> proc, std::unique_ptr<elf> obj)
-        : process_(std::move(proc)), elf_(std::move(obj)), stack_(this) {}
+        : process_(std::move(proc)), elf_(std::move(obj)), stack_(this),
+          main_elf_(obj.get()) {
+        elves_.push(std::move(obj));
+    }
     std::unique_ptr<process> process_;
     std::unique_ptr<elf> elf_;
 
     stack stack_;
     stoppoint_collection<breakpoint> breakpoints_;
+
+    void resolve_dynamic_linker_rendezvous();
+    void reload_dynamic_libraries();
+    virt_addr dynamic_linker_rendezvous_address_;
+
+    elf_collection elves_;
+    elf* main_elf_;
 };
 } // namespace sdb
 
