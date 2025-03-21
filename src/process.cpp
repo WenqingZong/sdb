@@ -158,10 +158,6 @@ void sdb::process::resume(std::optional<pid_t> otid) {
     auto tid = otid.value_or(current_thread_);
     step_over_breakpoint(tid);
     send_continue(tid);
-
-    swallow_pending_sigstop(tid);
-    if (ptrace(PTRACE_SINGLESTEP, tid, nullptr, nullptr) < 0) {
-    }
 }
 
 void sdb::process::step_over_breakpoint(pid_t tid) {
