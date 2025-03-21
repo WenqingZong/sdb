@@ -281,10 +281,11 @@ sdb::stop_reason sdb::process::wait_on_signal(pid_t to_await) {
 }
 
 void sdb::process::read_all_registers(pid_t tid) {
-    if (ptrace(PTRACE_GETREGS, tid, nullptr, &get_registers().data_.regs) < 0) {
+    if (ptrace(PTRACE_GETREGS, tid, nullptr, &get_registers(tid).data_.regs) <
+        0) {
         error::send_errno("Could not read GPR registers");
     }
-    if (ptrace(PTRACE_GETFPREGS, tid, nullptr, &get_registers().data_.i387) <
+    if (ptrace(PTRACE_GETFPREGS, tid, nullptr, &get_registers(tid).data_.i387) <
         0) {
         error::send_errno("Could not read FPR registers");
     }
