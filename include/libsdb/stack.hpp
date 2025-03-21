@@ -46,6 +46,9 @@ class stack {
     const registers& regs() const;
     virt_addr get_pc() const;
 
+    stack(target* tgt, pid_t tid) : target_(tgt), tid_(tid) {}
+    pid_t tid() const { return tid_; }
+
   private:
     target* target_ = nullptr;
     std::uint32_t inline_height_ = 0;
@@ -59,6 +62,8 @@ class stack {
     void create_base_frame(const registers& regs,
                            const std::vector<sdb::die> inline_stack,
                            file_addr pc, bool inlined);
+
+    pid_t tid_ = 0;
 };
 
 } // namespace sdb

@@ -4,6 +4,7 @@
 #include <csignal>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <libsdb/bit.hpp>
 #include <libsdb/breakpoint_site.hpp>
 #include <libsdb/registers.hpp>
@@ -22,6 +23,7 @@ enum class trap_type {
     software_break,
     hardware_break,
     syscall,
+    clone,
     unknown
 };
 
@@ -37,18 +39,18 @@ struct syscall_information {
 };
 
 struct stop_reason {
-    stop_reason(int wait_status);
-
     process_state reason;
     std::uint8_t info;
     std::optional<trap_type> trap_reason;
     std::optional<syscall_information> syscall_info;
+    pid_t tid;
 
     stop_reason() = default;
-    stop_reason(process_state reason, std::uint8_t info,
+    stop_reason(pid_t tid, int wait_status);
+    stop_reason(pid_t tid, process_state reason, std::uint8_t info,
                 std::optional<trap_type> trap_reason = std::nullopt,
                 std::optional<syscall_information> syscall_info = std::nullopt)
-        : reason(reason), info(info), trap_reason(trap_reason),
+        : tid(tid), reason(reason), info(info), trap_reason(trap_reason),
           syscall_info(syscall_info) {}
 
     bool is_step() const {
@@ -86,29 +88,38 @@ class syscall_catch_policy {
 
 class target;
 
+struct thread_state {
+    pid_t tid;
+    registers regs;
+    stop_reason reason;
+    process_state state = process_state::stopped;
+    bool pending_sigstop = false;
+};
+
 class process {
   public:
-    void write_fprs(const user_fpregs_struct& fprs);
-    void write_gprs(const user_regs_struct& gprs);
-    registers& get_registers() { return *registers_; }
-    const registers& get_registers() const { return *registers_; }
-    void write_user_area(std::size_t offset, std::uint64_t data);
+    void write_fprs(const user_fpregs_struct& fprs,
+                    std::optional<pid_t> otid = std::nullopt);
+    void write_gprs(const user_regs_struct& gprs,
+                    std::optional<pid_t> otid = std::nullopt);
+    registers& get_registers(std::optional<pid_t> otid = std::nullopt);
+    const registers&
+    get_registers(std::optional<pid_t> otid = std::nullopt) const;
+    void write_user_area(std::size_t offset, std::uint64_t data,
+                         std::optional<pid_t> otid = std::nullopt);
     static std::unique_ptr<process>
     launch(std::filesystem::path path, bool debug = true,
            std::optional<int> stdout_replacement = std::nullopt);
     static std::unique_ptr<process> attach(pid_t pid);
 
-    void resume();
-    stop_reason wait_on_signal();
+    void resume(std::optional<pid_t> otid = std::nullopt);
+    stop_reason wait_on_signal(pid_t to_await = -1);
     ~process();
 
     pid_t pid() const { return pid_; }
     process_state state() const { return state_; }
 
-    virt_addr get_pc() const {
-        return virt_addr{
-            get_registers().read_by_id_as<std::uint64_t>(register_id::rip)};
-    }
+    virt_addr get_pc(std::optional<pid_t> otid = std::nullopt) const;
 
     breakpoint_site& create_breakpoint_site(virt_addr address,
                                             bool hardware = false,
@@ -128,11 +139,9 @@ class process {
         return breakpoint_sites_;
     }
 
-    void set_pc(virt_addr address) {
-        get_registers().write_by_id(register_id::rip, address.addr());
-    }
+    void set_pc(virt_addr address, std::optional<pid_t> otid = std::nullopt);
 
-    sdb::stop_reason step_instruction();
+    sdb::stop_reason step_instruction(std::optional<pid_t> otid = std::nullopt);
 
     std::vector<std::byte> read_memory(virt_addr address,
                                        std::size_t amount) const;
@@ -164,7 +173,8 @@ class process {
     }
 
     std::variant<breakpoint_site::id_type, watchpoint::id_type>
-    get_current_hardware_stoppoint() const;
+    get_current_hardware_stoppoint(
+        std::optional<pid_t> otid = std::nullopt) const;
 
     void set_syscall_catch_policy(syscall_catch_policy info) {
         syscall_catch_policy_ = std::move(info);
@@ -175,6 +185,29 @@ class process {
 
     void set_target(target* tgt) { target_ = tgt; }
 
+    void set_current_thread(pid_t tid) { current_thread_ = tid; }
+    pid_t current_thread() const { return current_thread_; }
+    std::unordered_map<pid_t, thread_state>& thread_states() {
+        return threads_;
+    }
+    const std::unordered_map<pid_t, thread_state>& thread_states() const {
+        return threads_;
+    }
+
+    void stop_running_threads();
+    void resume_all_threads();
+
+    std::optional<sdb::stop_reason> cleanup_exited_threads(pid_t main_stop_tid);
+    void report_thread_lifecycle_event(const stop_reason& reason);
+
+    std::optional<stop_reason> handle_signal(stop_reason reason,
+                                             bool is_main_stop);
+
+    void install_thread_lifecycle_callback(
+        std::function<void(const stop_reason&)> callback) {
+        thread_lifecycle_callback_ = std::move(callback);
+    }
+
   private:
     pid_t pid_ = 0;
     bool terminate_on_end_ = true;
@@ -183,9 +216,13 @@ class process {
     process_state state_ = process_state::stopped;
     process(pid_t pid, bool terminate_on_end, bool is_attached)
         : pid_(pid), terminate_on_end_(terminate_on_end),
-          is_attached_(is_attached), registers_(new registers(*this)) {}
+          is_attached_(is_attached), current_thread_(pid) {
+        populate_existing_threads();
+    }
 
-    void read_all_registers();
+    void populate_existing_threads();
+
+    void read_all_registers(pid_t tid);
     process() = delete;
     process(const process&) = delete;
     process& operator=(const process&) = delete;
@@ -204,9 +241,18 @@ class process {
 
     bool expecting_syscall_exit_ = false;
 
-    sdb::stop_reason maybe_resume_from_syscall(const stop_reason& reason);
-
     target* target_ = nullptr;
+
+    std::unordered_map<pid_t, thread_state> threads_;
+    pid_t current_thread_ = 0;
+
+    bool should_resume_from_syscall(const stop_reason& reason);
+
+    void swallow_pending_sigstop(pid_t tid);
+    void send_continue(pid_t tid);
+    void step_over_breakpoint(pid_t tid);
+
+    std::function<void(const stop_reason&)> thread_lifecycle_callback_;
 };
 
 } // namespace sdb
