@@ -196,7 +196,7 @@ class dwarf_expression {
         std::uint64_t reg_num;
     };
     struct data_result {
-        span<const std::byte> value;
+        span<const std::byte> data;
     };
     struct literal_result {
         std::uint64_t value;

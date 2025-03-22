@@ -532,24 +532,32 @@ struct val_offset_rule {
 struct register_rule {
     std::uint32_t reg;
 };
+struct expr_rule {
+    sdb::dwarf_expression expr;
+};
+struct val_expr_rule {
+    sdb::dwarf_expression expr;
+};
 struct cfa_register_rule {
     std::uint32_t reg;
-    std::uint64_t offset;
+    std::int64_t offset;
+};
+struct cfa_expr_rule {
+    sdb::dwarf_expression expr;
 };
 
 struct unwind_context {
-    // Initialize the cursor with a null span.
     cursor cur{{nullptr, nullptr}};
     sdb::file_addr location;
-    cfa_register_rule cfa_rule;
-
-    // std::variant is a bit like union in C.
-    using rule = std::variant<undefined_rule, same_rule, offset_rule,
-                              val_offset_rule, register_rule>;
+    using cfa_rule_type = std::variant<cfa_register_rule, cfa_expr_rule>;
+    cfa_rule_type cfa_rule;
+    using rule =
+        std::variant<undefined_rule, same_rule, offset_rule, val_offset_rule,
+                     register_rule, expr_rule, val_expr_rule>;
     using ruleset = std::unordered_map<std::uint32_t, rule>;
     ruleset cie_register_rules;
     ruleset register_rules;
-    std::vector<std::pair<ruleset, cfa_register_rule>> rule_stack;
+    std::vector<std::pair<ruleset, cfa_rule_type>> rule_stack;
 };
 
 void execute_cfi_instruction(
@@ -604,24 +612,48 @@ void execute_cfi_instruction(
             ctx.location += cur.u32() * cie.code_alignment_factor;
             break;
         case DW_CFA_def_cfa:
-            ctx.cfa_rule.reg = cur.uleb128();
-            ctx.cfa_rule.offset = cur.uleb128();
+            ctx.cfa_rule =
+                cfa_register_rule{static_cast<std::uint32_t>(cur.uleb128()),
+                                  static_cast<std::uint32_t>(cur.uleb128())};
             break;
         case DW_CFA_def_cfa_sf:
-            ctx.cfa_rule.reg = cur.uleb128();
-            ctx.cfa_rule.offset = cur.sleb128() * cie.data_alignment_factor;
+            ctx.cfa_rule =
+                cfa_register_rule{static_cast<std::uint32_t>(cur.uleb128()),
+                                  cur.sleb128() * cie.data_alignment_factor};
             break;
         case DW_CFA_def_cfa_register:
-            ctx.cfa_rule.reg = cur.uleb128();
+            std::get<cfa_register_rule>(ctx.cfa_rule).reg = cur.uleb128();
             break;
         case DW_CFA_def_cfa_offset:
-            ctx.cfa_rule.offset = cur.uleb128();
+            std::get<cfa_register_rule>(ctx.cfa_rule).offset = cur.uleb128();
             break;
         case DW_CFA_def_cfa_offset_sf:
-            ctx.cfa_rule.offset = cur.sleb128() * cie.data_alignment_factor;
+            std::get<cfa_register_rule>(ctx.cfa_rule).offset =
+                cur.sleb128() * cie.data_alignment_factor;
             break;
-        case DW_CFA_def_cfa_expression:
-            sdb::error::send("DWARF expressions not yet implemented");
+        case DW_CFA_def_cfa_expression: {
+            auto length = cur.uleb128();
+            auto expr = sdb::dwarf_expression{
+                elf, {cur.position(), cur.position() + length}, true};
+            ctx.cfa_rule = cfa_expr_rule{expr};
+            break;
+        }
+        case DW_CFA_expression: {
+            auto reg = cur.uleb128();
+            auto length = cur.uleb128();
+            auto expr = sdb::dwarf_expression{
+                elf, {cur.position(), cur.position() + length}, true};
+            ctx.register_rules.emplace(reg, expr_rule{expr});
+            break;
+        }
+        case DW_CFA_val_expression: {
+            auto reg = cur.uleb128();
+            auto length = cur.uleb128();
+            auto expr = sdb::dwarf_expression{
+                elf, {cur.position(), cur.position() + length}, true};
+            ctx.register_rules.emplace(reg, val_expr_rule{expr});
+            break;
+        }
         case DW_CFA_undefined:
             ctx.register_rules.emplace(cur.uleb128(), undefined_rule{});
             break;
@@ -660,10 +692,6 @@ void execute_cfi_instruction(
                 reg, register_rule{static_cast<std::uint32_t>(cur.uleb128())});
             break;
         }
-        case DW_CFA_expression:
-            sdb::error::send("DWARF expressions not yet implemented");
-        case DW_CFA_val_expression:
-            sdb::error::send("DWARF expressions not yet implemented");
         case DW_CFA_restore_extended: {
             auto reg = cur.uleb128();
             ctx.register_rules.emplace(reg, ctx.cie_register_rules.at(reg));
@@ -672,12 +700,11 @@ void execute_cfi_instruction(
         case DW_CFA_remember_state:
             ctx.rule_stack.push_back({ctx.register_rules, ctx.cfa_rule});
             break;
-        case DW_CFA_restore_state: {
+        case DW_CFA_restore_state:
             ctx.register_rules = ctx.rule_stack.back().first;
             ctx.cfa_rule = ctx.rule_stack.back().second;
             ctx.rule_stack.pop_back();
             break;
-        }
         }
     }
 }
@@ -686,10 +713,23 @@ sdb::registers execute_unwind_rules(unwind_context& ctx,
                                     sdb::registers& old_regs,
                                     const sdb::process& proc) {
     auto unwound_regs = old_regs;
-    auto cfa_reg_info = sdb::register_info_by_dwarf(ctx.cfa_rule.reg);
-    auto cfa = std::get<std::uint64_t>(old_regs.read(cfa_reg_info)) +
-               ctx.cfa_rule.offset;
+
+    auto dwexp_addr_result = [&](const auto& res) {
+        auto& loc = std::get<sdb::dwarf_expression::simple_location>(res);
+        auto& addr_res = std::get<sdb::dwarf_expression::address_result>(loc);
+        return sdb::virt_addr{addr_res.address.addr()};
+    };
+    std::uint64_t cfa;
+    if (auto reg_rule = std::get_if<cfa_register_rule>(&ctx.cfa_rule)) {
+        auto reg_info = sdb::register_info_by_dwarf(reg_rule->reg);
+        cfa =
+            std::get<std::uint64_t>(old_regs.read(reg_info)) + reg_rule->offset;
+    } else if (auto expr = std::get_if<cfa_expr_rule>(&ctx.cfa_rule)) {
+        auto res = expr->expr.eval(proc, old_regs);
+        cfa = dwexp_addr_result(res).addr();
+    }
     old_regs.set_cfa(sdb::virt_addr{cfa});
+
     unwound_regs.write_by_id(sdb::register_id::rsp, {cfa}, false);
     for (auto [reg, rule] : ctx.register_rules) {
         auto reg_info = sdb::register_info_by_dwarf(reg);
@@ -708,6 +748,15 @@ sdb::registers execute_unwind_rules(unwind_context& ctx,
         } else if (auto val_offset = std::get_if<val_offset_rule>(&rule)) {
             auto addr = cfa + val_offset->offset;
             unwound_regs.write(reg_info, {addr}, false);
+        } else if (auto expr = std::get_if<expr_rule>(&rule)) {
+            auto res = expr->expr.eval(proc, old_regs);
+            auto addr = dwexp_addr_result(res);
+            auto value = proc.read_memory_as<std::uint64_t>(addr);
+            unwound_regs.write(reg_info, {value}, false);
+        } else if (auto val_expr = std::get_if<val_expr_rule>(&rule)) {
+            auto res = val_expr->expr.eval(proc, old_regs);
+            auto addr = dwexp_addr_result(res);
+            unwound_regs.write(reg_info, {addr.addr()}, false);
         }
     }
     return unwound_regs;
