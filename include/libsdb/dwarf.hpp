@@ -21,6 +21,7 @@ class die;
 class dwarf;
 class elf;
 class process;
+class type;
 
 class line_table {
   public:
@@ -265,6 +266,8 @@ class attr {
     dwarf_expression::result as_evaluated_location(const sdb::process& proc,
                                                    const registers& regs,
                                                    bool in_frame_info) const;
+
+    type as_type() const;
 
   private:
     const compile_unit* cu_;

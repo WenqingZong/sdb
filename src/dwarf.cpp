@@ -5,6 +5,7 @@
 #include <libsdb/elf.hpp>
 #include <libsdb/error.hpp>
 #include <libsdb/process.hpp>
+#include <libsdb/type.hpp>
 #include <libsdb/types.hpp>
 #include <string_view>
 #include <variant>
@@ -1857,3 +1858,5 @@ sdb::dwarf::find_global_variable(std::string name) const {
     }
     return std::nullopt;
 }
+
+sdb::type sdb::attr::as_type() const { return sdb::type{as_reference()}; }
