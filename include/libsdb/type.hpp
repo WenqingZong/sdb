@@ -66,6 +66,11 @@ class typed_data {
                               const sdb::die& member_die) const;
     std::string visualize(const sdb::process& proc, int depth = 0) const;
 
+    typed_data deref_pointer(const sdb::process& proc) const;
+    typed_data read_member(const sdb::process& proc,
+                           std::string_view member_name) const;
+    typed_data index(const sdb::process& proc, std::size_t index) const;
+
   private:
     std::vector<std::byte> data_;
     type type_;

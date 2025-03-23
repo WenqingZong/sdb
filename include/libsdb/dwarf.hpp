@@ -377,6 +377,10 @@ class dwarf {
 
     std::optional<die> find_global_variable(std::string name) const;
 
+    std::optional<die> find_local_variable(std::string name,
+                                           file_addr pc) const;
+    std::vector<die> scopes_at_address(file_addr address) const;
+
   private:
     const elf* elf_;
     std::unordered_map<std::size_t, std::unordered_map<std::uint64_t, abbrev>>
