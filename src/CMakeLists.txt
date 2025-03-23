@@ -16,7 +16,7 @@ target_include_directories(libsdb
         ${CMAKE_SOURCE_DIR}/src/include
 )
 
-target_link_libraries(libsdb PRIVATE Zydis::Zydis)
+target_link_libraries(libsdb PRIVATE Zydis::Zydis fmt::fmt)
 
 include(GNUInstallDirs)
 

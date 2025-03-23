@@ -426,6 +426,14 @@ class die {
     const line_table::file& file() const;
     std::uint64_t line() const;
 
+    struct bitfield_information {
+        std::uint64_t bit_size;
+        std::uint64_t storage_byte_size;
+        std::uint8_t bit_offset;
+    };
+    std::optional<bitfield_information>
+    get_bitfield_information(std::uint64_t class_byte_size) const;
+
   private:
     const std::byte* pos_ = nullptr;
     const compile_unit* cu_ = nullptr;

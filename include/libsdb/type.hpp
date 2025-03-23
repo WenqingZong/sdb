@@ -4,8 +4,11 @@
 #include <libsdb/dwarf.hpp>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 namespace sdb {
+
+class process;
 
 class type {
   public:
@@ -46,6 +49,27 @@ class type {
     std::size_t compute_byte_size() const;
     die die_;
     mutable std::optional<std::size_t> byte_size_;
+};
+
+class typed_data {
+  public:
+    typed_data(std::vector<std::byte> data, type value_type,
+               std::optional<virt_addr> address = std::nullopt)
+        : data_(std::move(data)), type_(value_type), address_(address) {}
+
+    const std::vector<std::byte>& data() const { return data_; }
+    const std::byte* data_ptr() const { return data_.data(); }
+    const type& value_type() const { return type_; }
+    std::optional<virt_addr> address() const { return address_; }
+
+    typed_data fixup_bitfield(const sdb::process& proc,
+                              const sdb::die& member_die) const;
+    std::string visualize(const sdb::process& proc, int depth = 0) const;
+
+  private:
+    std::vector<std::byte> data_;
+    type type_;
+    std::optional<virt_addr> address_;
 };
 
 } // namespace sdb

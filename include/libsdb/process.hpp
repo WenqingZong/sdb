@@ -208,6 +208,8 @@ class process {
         thread_lifecycle_callback_ = std::move(callback);
     }
 
+    std::string read_string(virt_addr address) const;
+
   private:
     pid_t pid_ = 0;
     bool terminate_on_end_ = true;

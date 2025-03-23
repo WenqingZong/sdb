@@ -1860,3 +1860,24 @@ sdb::dwarf::find_global_variable(std::string name) const {
 }
 
 sdb::type sdb::attr::as_type() const { return sdb::type{as_reference()}; }
+
+std::optional<sdb::die::bitfield_information>
+sdb::die::get_bitfield_information(std::uint64_t class_byte_size) const {
+    if (!contains(DW_AT_bit_offset) and !contains(DW_AT_data_bit_offset)) {
+        return std::nullopt;
+    }
+    auto bit_size = (*this)[DW_AT_bit_size].as_int();
+    auto storage_byte_size = contains(DW_AT_byte_size)
+                                 ? (*this)[DW_AT_byte_size].as_int()
+                                 : class_byte_size;
+    auto storage_bit_size = storage_byte_size * 8;
+    std::uint8_t bit_offset = 0;
+    if (contains(DW_AT_bit_offset)) {
+        auto offset_field = (*this)[DW_AT_bit_offset].as_int();
+        bit_offset = storage_bit_size - offset_field - bit_size;
+    }
+    if (contains(DW_AT_data_bit_offset)) {
+        bit_offset = (*this)[DW_AT_data_bit_offset].as_int() % 8;
+    }
+    return bitfield_information{bit_size, storage_byte_size, bit_offset};
+}
