@@ -1149,7 +1149,7 @@ std::optional<std::string_view> sdb::die::name() const {
     return std::nullopt;
 }
 
-void sdb::dwarf::index_die(const die& current) const {
+void sdb::dwarf::index_die(const die& current, bool in_function) const {
     bool has_range =
         current.contains(DW_AT_low_pc) or current.contains(DW_AT_ranges);
     bool is_function = current.abbrev_entry()->tag == DW_TAG_subprogram or
@@ -1160,8 +1160,21 @@ void sdb::dwarf::index_die(const die& current) const {
             function_index_.emplace(*name, entry);
         }
     }
+
+    auto has_location = current.contains(DW_AT_location);
+    auto is_variable = current.abbrev_entry()->tag == DW_TAG_variable;
+    if (has_location and is_variable and !in_function) {
+        if (auto name = current.name()) {
+            index_entry entry{current.cu(), current.position()};
+            global_variable_index_.emplace(*name, entry);
+        }
+    }
+    if (is_function) {
+        in_function = true;
+    }
+
     for (auto child : current.children()) {
-        index_die(child);
+        index_die(child, in_function);
     }
 }
 
@@ -1832,4 +1845,15 @@ sdb::dwarf_expression::result sdb::attr::as_evaluated_location(
     } else {
         error::send("Invalid location type");
     }
+}
+
+std::optional<sdb::die>
+sdb::dwarf::find_global_variable(std::string name) const {
+    index();
+    auto it = global_variable_index_.find(name);
+    if (it != global_variable_index_.end()) {
+        cursor cur({it->second.pos, it->second.cu->data().end()});
+        return parse_die(*it->second.cu, cur);
+    }
+    return std::nullopt;
 }

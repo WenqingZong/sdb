@@ -372,13 +372,15 @@ class dwarf {
 
     const call_frame_information& cfi() const { return *cfi_; }
 
+    std::optional<die> find_global_variable(std::string name) const;
+
   private:
     const elf* elf_;
     std::unordered_map<std::size_t, std::unordered_map<std::uint64_t, abbrev>>
         abbrev_tables_;
     std::vector<std::unique_ptr<compile_unit>> compile_units_;
     void index() const;
-    void index_die(const die& current) const;
+    void index_die(const die& current, bool in_function = false) const;
     struct index_entry {
         const compile_unit* cu;
         const std::byte* pos;
@@ -386,6 +388,9 @@ class dwarf {
     mutable std::unordered_multimap<std::string, index_entry> function_index_;
 
     std::unique_ptr<call_frame_information> cfi_;
+
+    mutable std::unordered_multimap<std::string, index_entry>
+        global_variable_index_;
 };
 
 class die {
