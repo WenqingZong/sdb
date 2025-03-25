@@ -816,7 +816,8 @@ std::optional<sdb::die> sdb::target::find_variable(std::string name,
 
 sdb::target::resolve_indirect_name_result
 sdb::target::resolve_indirect_name(std::string name, sdb::file_addr pc) const {
-    auto op_pos = name.find_first_of(".-[");
+    auto op_pos = name.find_first_of(".-[(");
+
     if (name[op_pos] == '(') {
         auto func_name = name.substr(0, op_pos);
         auto funcs = find_functions(func_name);
@@ -838,7 +839,7 @@ sdb::target::resolve_indirect_name(std::string name, sdb::file_addr pc) const {
         }
         if (name[op_pos] == '.' or name[op_pos] == '>') {
             auto member_name_start = op_pos + 1;
-            op_pos = name.find_first_of(".-[", member_name_start);
+            op_pos = name.find_first_of(".-[(,", member_name_start);
             auto member_name =
                 name.substr(member_name_start, op_pos - member_name_start);
             if (name[op_pos] == '(') {
@@ -869,8 +870,9 @@ sdb::target::resolve_indirect_name(std::string name, sdb::file_addr pc) const {
             data = data.index(get_process(), *index);
             name = name.substr(int_end + 1);
         }
-        op_pos = name.find_first_of(".-[");
+        op_pos = name.find_first_of(".-[(");
     }
+
     return {std::move(data), {}};
 }
 
@@ -894,6 +896,7 @@ sdb::virt_addr sdb::target::inferior_malloc(std::size_t size) {
     });
 
     process_->get_registers().write_by_id(register_id::rdi, size, true);
+
     auto new_regs = process_->inferior_call(call_addr, entry_point, saved_regs);
     auto result = new_regs.read_by_id_as<std::uint64_t>(register_id::rax);
 

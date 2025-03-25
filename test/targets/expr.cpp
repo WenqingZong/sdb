@@ -78,4 +78,4 @@ small s = {1, 2};
 two_eightbyte t = {3, 4};
 big b = {5, 6, 7};
 
-int main() {}
+int main() { return 0; }
