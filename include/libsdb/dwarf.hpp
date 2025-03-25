@@ -381,6 +381,9 @@ class dwarf {
                                            file_addr pc) const;
     std::vector<die> scopes_at_address(file_addr address) const;
 
+    std::optional<die>
+    get_member_function_definition(const sdb::die& declaration) const;
+
   private:
     const elf* elf_;
     std::unordered_map<std::size_t, std::unordered_map<std::uint64_t, abbrev>>
@@ -398,6 +401,9 @@ class dwarf {
 
     mutable std::unordered_multimap<std::string, index_entry>
         global_variable_index_;
+
+    mutable std::unordered_map<const std::byte*, index_entry>
+        member_function_index_;
 };
 
 class die {
@@ -437,6 +443,8 @@ class die {
     };
     std::optional<bitfield_information>
     get_bitfield_information(std::uint64_t class_byte_size) const;
+
+    std::vector<type> parameter_types() const;
 
   private:
     const std::byte* pos_ = nullptr;

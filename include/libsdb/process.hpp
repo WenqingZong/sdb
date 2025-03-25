@@ -210,6 +210,11 @@ class process {
 
     std::string read_string(virt_addr address) const;
 
+    sdb::registers inferior_call(sdb::virt_addr func_addr,
+                                 sdb::virt_addr return_addr,
+                                 const sdb::registers& regs_to_restore,
+                                 std::optional<pid_t> otid = std::nullopt);
+
   private:
     pid_t pid_ = 0;
     bool terminate_on_end_ = true;
