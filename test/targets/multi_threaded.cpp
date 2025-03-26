@@ -4,6 +4,8 @@
 #include <vector>
 
 void* say_hi(void*) {
+    // Give the debugger time to catch each thread at the breakpoint
+    sleep(1);
     std::cout << "Thread " << gettid() << " reporting in\n";
     return nullptr;
 }
